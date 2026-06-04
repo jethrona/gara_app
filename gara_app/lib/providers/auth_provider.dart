@@ -129,7 +129,17 @@ class AuthProvider extends ChangeNotifier {
         return _errorMessage;
       }
 
-      final response = await _authService.registerWithEmailPassword(phoneNumber, password);
+      AuthResponse response;
+      try {
+        response = await _authService.registerWithEmailPassword(phoneNumber, password);
+      } catch (e) {
+        final msg = e.toString().toLowerCase();
+        if (msg.contains('user already registered') || msg.contains('email already registered')) {
+          final loginResult = await loginPatient(phoneNumber: phoneNumber, password: password);
+          if (loginResult == null) return null;
+        }
+        rethrow;
+      }
 
       if (response.user == null) {
         _isLoading = false;
@@ -227,7 +237,20 @@ class AuthProvider extends ChangeNotifier {
         return _errorMessage;
       }
 
-      final response = await _authService.registerWithEmailPassword(phoneNumber, password);
+      AuthResponse response;
+      try {
+        response = await _authService.registerWithEmailPassword(phoneNumber, password);
+      } catch (e) {
+        final msg = e.toString().toLowerCase();
+        if (msg.contains('user already registered') || msg.contains('email already registered')) {
+          final loginResult = await loginPatient(phoneNumber: phoneNumber, password: password);
+          if (loginResult == null) {
+            _isDoctor = true;
+            return null;
+          }
+        }
+        rethrow;
+      }
 
       if (response.user == null) {
         _isLoading = false;

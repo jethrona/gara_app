@@ -77,10 +77,18 @@ class AuthService {
   String _phoneToEmail(String phone) => '$phone@gara.app';
 
   Future<AuthResponse> registerWithEmailPassword(String phone, String password) async {
-    return await _supabase.client.auth.signUp(
+    final response = await _supabase.client.auth.signUp(
       email: _phoneToEmail(phone),
       password: password,
     );
+    if (response.user != null && response.session == null) {
+      try {
+        return await loginWithEmailPassword(phone, password);
+      } catch (_) {
+        throw Exception('Email confirmation required. Please disable "Confirm email" in Supabase Authentication settings, or contact support.');
+      }
+    }
+    return response;
   }
 
   Future<AuthResponse> loginWithEmailPassword(String phone, String password) async {

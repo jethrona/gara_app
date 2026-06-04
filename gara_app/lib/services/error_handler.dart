@@ -16,10 +16,16 @@ class ErrorHandler {
       return 'This information already exists in our system.';
     }
     if (lower.contains('422') || lower.contains('anonymous') && lower.contains('disabled')) {
-      return 'Account creation is temporarily unavailable. Please try again later.';
+      return 'Sign-up is not allowed. Make sure the Email provider is enabled in Supabase Auth settings.';
     }
     if (lower.contains('auth') || lower.contains('invalid login') || lower.contains('wrong')) {
       return 'Invalid credentials. Please check your information and try again.';
+    }
+    if (lower.contains('user already registered') || lower.contains('email already registered')) {
+      return 'An account with this phone number already exists. Try logging in instead.';
+    }
+    if (lower.contains('email not confirmed') || lower.contains('email_confirmed')) {
+      return 'Please confirm your email address before logging in.';
     }
     if (lower.contains('storage') || lower.contains('upload')) {
       return 'Failed to upload file. Please try again.';
