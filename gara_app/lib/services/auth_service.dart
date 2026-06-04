@@ -74,7 +74,7 @@ class AuthService {
     return stored == pin;
   }
 
-  String _phoneToEmail(String phone) => '$phone@gara.app';
+  String _phoneToEmail(String phone) => '${phone.replaceAll(RegExp(r'\D'), '')}@gara.app';
 
   Future<AuthResponse> registerWithEmailPassword(String phone, String password) async {
     final response = await _supabase.client.auth.signUp(

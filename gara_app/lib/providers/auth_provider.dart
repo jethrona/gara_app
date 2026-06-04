@@ -135,8 +135,31 @@ class AuthProvider extends ChangeNotifier {
       } catch (e) {
         final msg = e.toString().toLowerCase();
         if (msg.contains('user already registered') || msg.contains('email already registered')) {
-          final loginResult = await loginPatient(phoneNumber: phoneNumber, password: password);
-          if (loginResult == null) return null;
+          final loginResp = await _authService.loginWithEmailPassword(phoneNumber, password);
+          if (loginResp.user == null) {
+            _isLoading = false;
+            _setError('Account exists but could not log in. Try signing in manually.');
+            notifyListeners();
+            return _errorMessage;
+          }
+          _user = loginResp.user;
+          _profile = await _authService.getProfile(_user!.id);
+          if (_profile == null) {
+            _profile = await _authService.createProfile(
+              id: _user!.id,
+              phoneNumber: phoneNumber,
+              fullName: fullName,
+            );
+          }
+          _isLoggedIn = true;
+          _isDoctor = _profile?.isDoctor ?? false;
+          _lastPhone = phoneNumber;
+          if (_rememberMe) {
+            await _authService.saveRememberedCredentials(phoneNumber, password);
+          }
+          _isLoading = false;
+          notifyListeners();
+          return null;
         }
         rethrow;
       }
@@ -243,11 +266,32 @@ class AuthProvider extends ChangeNotifier {
       } catch (e) {
         final msg = e.toString().toLowerCase();
         if (msg.contains('user already registered') || msg.contains('email already registered')) {
-          final loginResult = await loginPatient(phoneNumber: phoneNumber, password: password);
-          if (loginResult == null) {
-            _isDoctor = true;
-            return null;
+          final loginResp = await _authService.loginWithEmailPassword(phoneNumber, password);
+          if (loginResp.user == null) {
+            _isLoading = false;
+            _setError('Account exists but could not log in. Try signing in manually.');
+            notifyListeners();
+            return _errorMessage;
           }
+          _user = loginResp.user;
+          _profile = await _authService.getProfile(_user!.id);
+          if (_profile == null) {
+            _profile = await _authService.createProfile(
+              id: _user!.id,
+              phoneNumber: phoneNumber,
+              fullName: fullName,
+              isDoctor: true,
+            );
+          }
+          _isLoggedIn = true;
+          _isDoctor = true;
+          _lastPhone = phoneNumber;
+          if (_rememberMe) {
+            await _authService.saveRememberedCredentials(phoneNumber, password);
+          }
+          _isLoading = false;
+          notifyListeners();
+          return null;
         }
         rethrow;
       }

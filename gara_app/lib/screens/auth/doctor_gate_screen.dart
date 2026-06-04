@@ -169,14 +169,16 @@ class _DoctorGateScreenState extends State<DoctorGateScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     final auth = context.read<AuthProvider>();
+    final phone = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
     final error = await auth.registerDoctor(
-      phoneNumber: _phoneController.text.trim(),
+      phoneNumber: phone,
       fullName: _nameController.text.trim(),
       registrationToken: _tokenController.text.trim(),
       password: _passwordController.text.trim(),
     );
 
     if (error == null && mounted) {
+      auth.clearError();
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const DoctorDashboard()),

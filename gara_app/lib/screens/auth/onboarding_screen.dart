@@ -35,6 +35,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        context.read<AuthProvider>().clearError();
+      }
+    });
     _regPasswordController.addListener(_updateStrength);
   }
 
@@ -259,7 +264,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: (_agreedToTerms && !auth.isLoading && strength.index >= 2) ? () => _register(lang) : null,
+              onPressed: (_agreedToTerms && !auth.isLoading) ? () => _register(lang) : null,
               child: auth.isLoading
                   ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : Text(lang.t('Create Account', 'Fungura Konti')),
@@ -467,12 +472,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
   Future<void> _register(LanguageProvider lang) async {
     final name = _regNameController.text.trim();
-    final phone = _regPhoneController.text.trim();
+    final rawPhone = _regPhoneController.text.trim();
+    final phone = rawPhone.replaceAll(RegExp(r'\D'), '');
     final password = _regPasswordController.text.trim();
 
-    if (name.isEmpty || phone.isEmpty || password.length < 6) {
+    if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(lang.t('Please fill all fields', 'Uzuza ibisabwa byose'))),
+        SnackBar(content: Text(lang.t('Please enter your full name', 'Uzuza amazina yawe')), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+    if (phone.length < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(lang.t('Enter a valid phone number (10+ digits)', 'Shyiramo nomero ikwiye (10+ imibare)')), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+    if (password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(lang.t('Password must be at least 6 characters', 'Ijambo ry\'ibanga rigomba kuba byibura 6')), behavior: SnackBarBehavior.floating),
       );
       return;
     }
@@ -485,6 +503,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     );
 
     if (error == null && mounted) {
+      auth.clearError();
       await _checkBiometricSetup();
       if (mounted) {
         Navigator.pushReplacement(
@@ -496,12 +515,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   }
 
   Future<void> _login(LanguageProvider lang) async {
-    final phone = _loginPhoneController.text.trim();
+    final rawPhone = _loginPhoneController.text.trim();
+    final phone = rawPhone.replaceAll(RegExp(r'\D'), '');
     final password = _loginPasswordController.text.trim();
 
-    if (phone.isEmpty || password.isEmpty) return;
+    if (phone.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(lang.t('Please fill all fields', 'Uzuza ibisabwa byose')), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
 
     final auth = context.read<AuthProvider>();
+    auth.clearError();
     final error = await auth.loginPatient(
       phoneNumber: phone,
       password: password,
