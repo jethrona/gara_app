@@ -1,0 +1,565 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import '../../config/constants.dart';
+import '../../config/theme.dart';
+import '../../models/consultation_model.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/consultation_provider.dart';
+import '../../providers/language_provider.dart';
+import '../../providers/notification_provider.dart';
+import '../../widgets/language_toggle.dart';
+import '../../widgets/financial_ticker.dart';
+import '../../widgets/consultation_card.dart';
+import 'doctor_chat_workspace.dart';
+import '../auth/onboarding_screen.dart';
+
+class DoctorDashboard extends StatefulWidget {
+  const DoctorDashboard({super.key});
+
+  @override
+  State<DoctorDashboard> createState() => _DoctorDashboardState();
+}
+
+class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _initDoctor();
+  }
+
+  void _initDoctor() {
+    final consultationProvider = context.read<ConsultationProvider>();
+    final notifProvider = context.read<NotificationProvider>();
+    final auth = context.read<AuthProvider>();
+    consultationProvider.loadDoctorQueues();
+    consultationProvider.startRealtimeListener();
+    if (auth.profile != null) {
+      notifProvider.init(auth.profile!.id);
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
+    final consultationProvider = context.watch<ConsultationProvider>();
+    final auth = context.watch<AuthProvider>();
+    final notifProvider = context.watch<NotificationProvider>();
+    final stats = consultationProvider.doctorStats;
+
+    return Scaffold(
+      backgroundColor: AppTheme.surfaceBg,
+      appBar: AppBar(
+        title: Text(lang.t('Doctor Panel', 'Ikibaho cy\'Umuganga')),
+        actions: [
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined),
+                onPressed: () => _showNotifications(lang),
+              ),
+              if (notifProvider.unreadCount > 0)
+                Positioned(
+                  right: 6,
+                  top: 6,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: AppTheme.errorRed,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '${notifProvider.unreadCount}',
+                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const Padding(padding: EdgeInsets.only(right: 4), child: LanguageToggle()),
+        ],
+      ),
+      drawer: _buildDrawer(lang, auth),
+      body: RefreshIndicator(
+        onRefresh: () => consultationProvider.loadDoctorQueues(),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(child: _buildFinancialTickers(lang, stats)),
+            SliverToBoxAdapter(child: _buildTabBar(lang, consultationProvider)),
+            SliverFillRemaining(child: _buildTabContent(lang, consultationProvider)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showNotifications(LanguageProvider lang) {
+    final notifProvider = context.read<NotificationProvider>();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        maxChildSize: 0.9,
+        minChildSize: 0.5,
+        expand: false,
+        builder: (_, scrollController) => Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(lang.t('Notifications', 'Imenyesha'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                  if (notifProvider.unreadCount > 0)
+                    TextButton(
+                      onPressed: () => notifProvider.markAllAsRead(),
+                      child: Text(lang.t('Mark all read', 'Soma zose')),
+                    ),
+                ],
+              ),
+              const Divider(),
+              Expanded(
+                child: notifProvider.notifications.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.notifications_none, size: 48, color: AppTheme.textMuted),
+                            const SizedBox(height: 12),
+                            Text(lang.t('No notifications', 'Nta menyesha'), style: const TextStyle(color: AppTheme.textMuted)),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: scrollController,
+                        itemCount: notifProvider.notifications.length,
+                        itemBuilder: (_, i) {
+                          final n = notifProvider.notifications[i];
+                          return ListTile(
+                            leading: Icon(
+                              n.type == 'payment' ? Icons.payments_rounded :
+                              n.type == 'consultation' ? Icons.medical_services_rounded :
+                              Icons.info_rounded,
+                              color: n.isRead ? AppTheme.textMuted : AppTheme.primaryGreen,
+                            ),
+                            title: Text(n.title, style: TextStyle(fontWeight: n.isRead ? FontWeight.w400 : FontWeight.w600)),
+                            subtitle: Text(n.body, style: const TextStyle(fontSize: 12)),
+                            trailing: n.isRead ? null : Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: AppTheme.primaryGreen)),
+                            onTap: () {
+                              if (n.id != null) notifProvider.markAsRead(n.id!);
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDrawer(LanguageProvider lang, AuthProvider auth) {
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppTheme.primaryGreen, AppTheme.primaryGreenDark],
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 60, height: 60,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(16),
+                      image: auth.profile?.avatarUrl != null
+                          ? DecorationImage(image: NetworkImage(auth.profile!.avatarUrl!), fit: BoxFit.cover)
+                          : null,
+                    ),
+                    child: auth.profile?.avatarUrl == null
+                        ? const Icon(Icons.medical_information_rounded, color: Colors.white, size: 32)
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(auth.profile?.fullName ?? '',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
+                  Text(auth.profile?.phoneNumber ?? '',
+                      style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.8))),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.dashboard_rounded, color: AppTheme.primaryGreen),
+              title: Text(lang.t('Dashboard', 'Ikibaho')),
+              selected: true,
+              onTap: () => Navigator.pop(context),
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings_rounded, color: AppTheme.textSecondary),
+              title: Text(lang.t('Profile', 'Profili')),
+              onTap: () {
+                Navigator.pop(context);
+                _showEditProfile(lang);
+              },
+            ),
+            const Spacer(),
+            ListTile(
+              leading: const Icon(Icons.logout_rounded, color: AppTheme.errorRed),
+              title: Text(lang.t('Sign Out', 'Sohoka')),
+              onTap: () async {
+                await auth.signOut();
+                if (context.mounted) {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+                    (route) => false,
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditProfile([LanguageProvider? lang]) {
+    final auth = context.read<AuthProvider>();
+    final nameController = TextEditingController(text: auth.profile?.fullName ?? '');
+    final picker = ImagePicker();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(lang?.t('Edit Profile', 'Hindura Profili') ?? 'Edit Profile'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GestureDetector(
+              onTap: () async {
+                final file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+                if (file != null) {
+                  await auth.uploadAvatar(File(file.path));
+                }
+              },
+              child: CircleAvatar(
+                radius: 36,
+                backgroundImage: auth.profile?.avatarUrl != null
+                    ? NetworkImage(auth.profile!.avatarUrl!)
+                    : null,
+                child: auth.profile?.avatarUrl == null
+                    ? const Icon(Icons.camera_alt, size: 32, color: AppTheme.textMuted)
+                    : null,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: nameController,
+              decoration: InputDecoration(labelText: lang?.t('Full Name', 'Amazina Yose') ?? 'Full Name'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(lang?.t('Cancel', 'Guhagarika') ?? 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await auth.updateProfile(fullName: nameController.text.trim());
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: Text(lang?.t('Save', 'Kubika') ?? 'Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFinancialTickers(LanguageProvider lang, Map<String, dynamic> stats) {
+    final todayIncome = (stats['todayIncome'] as double?) ?? 0.0;
+    final monthlyIncome = (stats['monthlyIncome'] as double?) ?? 0.0;
+    final totalPatients = (stats['totalPatients'] as int?) ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(lang.t('Financial Overview', 'Reba Amafaranga'),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FinancialTicker(
+                  label: lang.t("Today's Income", 'Amafaranga Y\'Uyu Munsi'),
+                  amount: todayIncome,
+                  icon: Icons.trending_up_rounded,
+                  color: AppTheme.successGreen,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FinancialTicker(
+                  label: lang.t('Monthly Income', 'Amafaranga Y\'Uku Kwezi'),
+                  amount: monthlyIncome,
+                  icon: Icons.calendar_month_rounded,
+                  color: AppTheme.accentBlue,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.borderLight),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryGreen.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.people_rounded, color: AppTheme.primaryGreen, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(lang.t('Total Patients', 'Indwara Zose')),
+                      Text('$totalPatients',
+                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: AppTheme.textMuted),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabBar(LanguageProvider lang, ConsultationProvider provider) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.borderLight),
+      ),
+      child: TabBar(
+        controller: _tabController,
+        onTap: (_) => setState(() {}),
+        tabs: [
+          Tab(text: '${lang.t("Payments", "Amafaranga")} (${provider.pendingPayments.length})'),
+          Tab(text: '${lang.t("Active", "Igikora")} (${provider.inProcess.length})'),
+          Tab(text: '${lang.t("Complete", "Byarangiye")} (${provider.completed.length})'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabContent(LanguageProvider lang, ConsultationProvider provider) {
+    return TabBarView(
+      controller: _tabController,
+      children: [
+        _buildQueueList(lang, provider.pendingPayments, CareStatus.pendingPayment),
+        _buildQueueList(lang, provider.inProcess, CareStatus.inProcess),
+        _buildQueueList(lang, provider.completed, CareStatus.complete),
+      ],
+    );
+  }
+
+  Widget _buildQueueList(LanguageProvider lang, List<ConsultationModel> items, CareStatus status) {
+    final consultationProvider = context.read<ConsultationProvider>();
+    if (consultationProvider.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (items.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              status == CareStatus.pendingPayment
+                  ? Icons.payments_rounded
+                  : status == CareStatus.inProcess
+                      ? Icons.chat_rounded
+                      : Icons.check_circle_rounded,
+              size: 48,
+              color: AppTheme.textMuted,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              status == CareStatus.pendingPayment
+                  ? lang.t('No pending payments', 'Nta mafaranga ategejeje')
+                  : status == CareStatus.inProcess
+                      ? lang.t('No active consultations', 'Nta buvuzi bukora')
+                      : lang.t('No completed consultations', 'Nta buvuzi bwarangiye'),
+              style: const TextStyle(fontSize: 16, color: AppTheme.textMuted),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final consultation = items[index];
+        return ConsultationCard(
+          consultation: consultation,
+          onTap: () {
+            if (status == CareStatus.pendingPayment) {
+              _showPaymentVerification(consultation);
+            } else if (status == CareStatus.inProcess) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => DoctorChatWorkspace(consultation: consultation),
+                ),
+              );
+            } else {
+              _showCompletedDetails(consultation);
+            }
+          },
+        );
+      },
+    );
+  }
+
+  void _showPaymentVerification(ConsultationModel consultation) {
+    final lang = context.read<LanguageProvider>();
+    final transactionController = TextEditingController();
+    final amountController = TextEditingController(text: AppConstants.consultationFee.toString());
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          left: 24, right: 24, top: 24,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(lang.t('Verify Payment', 'Emeza Amafaranga'),
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Text('${lang.t("Patient:", "Umurwayi:")} ${consultation.patientName ?? "Unknown"}',
+                style: const TextStyle(color: AppTheme.textSecondary)),
+            const SizedBox(height: 20),
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: lang.t('Amount (RWF)', 'Amafaranga (RWF)'),
+                prefixIcon: const Icon(Icons.monetization_on_rounded),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: transactionController,
+              decoration: InputDecoration(
+                labelText: lang.t('MoMo Transaction Ref', 'Ref y\'ihererekanywa'),
+                prefixIcon: const Icon(Icons.receipt_rounded),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () async {
+                  final provider = context.read<ConsultationProvider>();
+                  final notifProvider = context.read<NotificationProvider>();
+                  await provider.verifyPayment(
+                    consultationId: consultation.id!,
+                    transactionId: transactionController.text.trim(),
+                    amount: double.tryParse(amountController.text) ?? AppConstants.consultationFee,
+                  );
+                  if (consultation.patientId != null) {
+                    notifProvider.createNotification(
+                      userId: consultation.patientId!,
+                      title: lang.t('Payment Confirmed', 'Amafaranga yemejwe'),
+                      body: lang.t('Your payment of ${amountController.text} RWF was confirmed. You can now chat with the doctor.', 'Amafaranga yawe yemejwe. Ushobora kuvugana na muganga.'),
+                      type: 'payment',
+                    );
+                  }
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                child: Text(lang.t('Confirm Payment', 'Emeza Amafaranga')),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCompletedDetails(ConsultationModel consultation) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Consultation #${consultation.id}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Patient: ${consultation.patientName ?? "Unknown"}'),
+            Text('Sex: ${consultation.biologicalSex}'),
+            Text('Severity: ${consultation.severityLevel.split("–")[0].trim()}'),
+            Text('Amount: ${consultation.paymentAmount} RWF'),
+            if (consultation.aiBriefSummary != null) ...[
+              const SizedBox(height: 8),
+              const Text('AI Brief:', style: TextStyle(fontWeight: FontWeight.w600)),
+              Text(consultation.aiBriefSummary!, style: const TextStyle(fontSize: 12)),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+}

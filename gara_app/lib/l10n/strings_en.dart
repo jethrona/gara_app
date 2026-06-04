@@ -1,0 +1,25 @@
+class StringsEn {
+  static const Map<String, String> strings = {
+    'app_name': 'Gara',
+    'tagline': 'Your Health, In Your Hands',
+    'welcome_title': 'Welcome to Gara',
+    'welcome_subtitle': 'Fast, secure medical consultations from your phone.',
+    'pay_title': 'Pay via Mobile Money',
+    'pay_subtitle': 'Simple 2,000 RWF consultation fee via MTN MoMo.',
+    'chat_title': 'Chat with Your Doctor',
+    'chat_subtitle': 'Send messages, photos, and voice notes to your doctor in real-time.',
+    'im_a_doctor': "I'm a Doctor",
+    'ndi_muganga': 'Ndi Muganga',
+    'create_account': 'Create Your Account',
+    'enter_details': 'Enter your details to get started',
+    'full_name': 'Full Name',
+    'phone_number': 'Phone Number',
+    'agree_terms': 'I agree to the Terms of Service & Privacy Policy',
+    'get_started': 'Get Started',
+    'back': 'Back',
+    'next': 'Next',
+    'skip': 'Skip',
+    'submit': 'Submit',
+    'start_now': 'Start Now',
+  };
+}

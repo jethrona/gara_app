@@ -1,0 +1,37 @@
+name: gara
+description: "Gara - Single-stack native mobile clinical platform for independent private practices."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  supabase_flutter: ^2.8.4
+  flutter_secure_storage: ^9.2.4
+  local_auth: ^2.3.0
+  image_picker: ^1.1.2
+  flutter_image_compress: ^2.3.0
+  pdf: ^3.11.1
+  printing: ^5.13.4
+  google_generative_ai: ^0.4.6
+  provider: ^6.1.2
+  intl: ^0.19.0
+  cached_network_image: ^3.4.1
+  path_provider: ^2.1.4
+  permission_handler: ^11.3.1
+  uuid: ^4.5.1
+  google_fonts: ^6.2.1
+  shimmer: ^3.0.0
+  connectivity_plus: ^6.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

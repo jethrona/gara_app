@@ -1,0 +1,25 @@
+class StringsRw {
+  static const Map<String, String> strings = {
+    'app_name': 'Gara',
+    'tagline': 'Ubuzima Bwawe, Mu Biganza Byawe',
+    'welcome_title': 'Murakaza Neza kuri Gara',
+    'welcome_subtitle': 'Ubuvuzi bwihuse, bwizewe uhereye kuri terefone yawe.',
+    'pay_title': 'Ishema ukoresheje Mobile Money',
+    'pay_subtitle': 'Amafaranga y\'ubuvuzi 2,000 RWF ukoresheje MTN MoMo.',
+    'chat_title': 'Kikira n\'Umuganga wawe',
+    'chat_subtitle': 'Ohereza ubutumwa, amafoto, n\'amajwi kuri muganga wawe mu kanya.',
+    'im_a_doctor': 'Ndi Umuganga',
+    'ndi_muganga': 'Ndi Umuganga',
+    'create_account': 'Fungura Konti',
+    'enter_details': 'Shyiramo amakuru yawe',
+    'full_name': 'Amazina Yose',
+    'phone_number': 'Nomero ya Telefone',
+    'agree_terms': 'Nemeye Amategeko na Politiki',
+    'get_started': 'Tangira',
+    'back': 'Inyuma',
+    'next': 'Ibikurikira',
+    'skip': 'Reka',
+    'submit': 'Ohereza',
+    'start_now': 'Tangira Nonaha',
+  };
+}
