@@ -35,7 +35,7 @@ class StorageService {
       'webm' => 'audio/webm',
       'ogg' => 'audio/ogg',
       'wav' => 'audio/wav',
-      _ => 'audio/mp4',
+      _ => 'audio/aac',
     };
     await _supabase.client.storage.from('media').uploadBinary(
       path,

@@ -145,9 +145,9 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
                 children: [
                   Expanded(
                     child: VoiceRecorderWidget(
-                      onSend: (bytes, duration) {
-                        _sendVoice(bytes, duration);
-                        setState(() => _showRecorder = false);
+                      onSend: (bytes, duration) async {
+                        await _sendVoice(bytes, duration);
+                        if (mounted) setState(() => _showRecorder = false);
                       },
                       onCancel: () => setState(() => _showRecorder = false),
                     ),
