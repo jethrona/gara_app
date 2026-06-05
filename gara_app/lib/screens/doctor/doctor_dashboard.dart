@@ -232,11 +232,19 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
               onTap: () => Navigator.pop(context),
             ),
             ListTile(
-              leading: const Icon(Icons.settings_rounded, color: AppTheme.textSecondary),
+              leading: const Icon(Icons.person_rounded, color: AppTheme.textSecondary),
               title: Text(lang.t('Profile', 'Profili')),
               onTap: () {
                 Navigator.pop(context);
                 _showEditProfile(lang);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.tune_rounded, color: AppTheme.textSecondary),
+              title: Text('Settings'),
+              onTap: () {
+                Navigator.pop(context);
+                _showSettings(lang);
               },
             ),
             const Spacer(),
@@ -336,6 +344,70 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
           TextButton(
             onPressed: () async {
               await auth.updateProfile(fullName: nameController.text.trim());
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: Text(lang?.t('Save', 'Kubika') ?? 'Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSettings([LanguageProvider? lang]) {
+    final auth = context.read<AuthProvider>();
+    final feeController = TextEditingController(text: auth.profile != null ? '${auth.profile!.consultationFee}' : '2000');
+    final nameController = TextEditingController(text: auth.profile?.fullName ?? '');
+    final phoneController = TextEditingController(text: auth.profile?.phoneNumber ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Practice Settings'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: feeController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Consultation Fee (RWF)',
+                  prefixIcon: Icon(Icons.monetization_on_rounded),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Display Name',
+                  prefixIcon: Icon(Icons.person_rounded),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Phone Number',
+                  prefixIcon: Icon(Icons.phone_rounded),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(lang?.t('Cancel', 'Guhagarika') ?? 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final fee = int.tryParse(feeController.text.trim()) ?? 2000;
+              await auth.updateDoctorSettings(
+                consultationFee: fee,
+                fullName: nameController.text.trim(),
+                phoneNumber: phoneController.text.trim(),
+              );
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: Text(lang?.t('Save', 'Kubika') ?? 'Save'),

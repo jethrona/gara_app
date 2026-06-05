@@ -30,11 +30,18 @@ class StorageService {
   }) async {
     final safeName = '${DateTime.now().millisecondsSinceEpoch}_$fileName';
     final path = 'consultations/$patientId/voice/$safeName';
+    final ext = fileName.split('.').last.toLowerCase();
+    final contentType = switch (ext) {
+      'webm' => 'audio/webm',
+      'ogg' => 'audio/ogg',
+      'wav' => 'audio/wav',
+      _ => 'audio/mp4',
+    };
     await _supabase.client.storage.from('media').uploadBinary(
       path,
       voiceBytes,
-      fileOptions: const FileOptions(
-        contentType: 'audio/mp4',
+      fileOptions: FileOptions(
+        contentType: contentType,
         upsert: true,
       ),
     );

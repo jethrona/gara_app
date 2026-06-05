@@ -5,7 +5,16 @@ import '../models/consultation_model.dart';
 
 class StatusTrackerCard extends StatelessWidget {
   final ConsultationModel consultation;
-  const StatusTrackerCard({super.key, required this.consultation});
+  final String doctorName;
+  final String doctorPhone;
+  final int doctorFee;
+  const StatusTrackerCard({
+    super.key,
+    required this.consultation,
+    this.doctorName = 'Doctor',
+    this.doctorPhone = '',
+    this.doctorFee = 2000,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +129,7 @@ class StatusTrackerCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Send ${AppConstants.consultationFee.toInt()} RWF to ${AppConstants.momoNumber} via *182#',
+                      'Send $doctorFee RWF to $doctorPhone ($doctorName) via *182#',
                       style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
                     ),
                   ),

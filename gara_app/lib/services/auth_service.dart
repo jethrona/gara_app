@@ -205,10 +205,14 @@ class AuthService {
     required String id,
     String? fullName,
     String? avatarUrl,
+    String? phoneNumber,
+    int? consultationFee,
   }) async {
     final updates = <String, dynamic>{};
     if (fullName != null) updates['full_name'] = fullName;
     if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
+    if (phoneNumber != null) updates['phone_number'] = phoneNumber;
+    if (consultationFee != null) updates['consultation_fee'] = consultationFee;
     if (updates.isNotEmpty) {
       await _supabase.client.from('profiles').update(updates).eq('id', id);
     }

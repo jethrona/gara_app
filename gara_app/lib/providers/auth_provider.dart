@@ -338,6 +338,26 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> updateDoctorSettings({
+    required int consultationFee,
+    required String fullName,
+    required String phoneNumber,
+  }) async {
+    if (_userId.isEmpty) return;
+    try {
+      await _authService.updateProfile(
+        id: _userId,
+        fullName: fullName,
+        phoneNumber: phoneNumber,
+        consultationFee: consultationFee,
+      );
+      _profile = await _authService.getProfile(_userId);
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
+
   Future<String?> uploadAvatar(Uint8List imageBytes, {String extension = 'jpg'}) async {
     if (_userId.isEmpty) return null;
     try {

@@ -5,6 +5,17 @@ import '../models/message_model.dart';
 import '../services/chat_service.dart';
 import '../services/storage_service.dart';
 
+String _detectExtension(Uint8List bytes) {
+  if (bytes.length < 4) return 'm4a';
+  // WebM / Matroska: 0x1A 0x45 0xDF 0xA3
+  if (bytes[0] == 0x1A && bytes[1] == 0x45 && bytes[2] == 0xDF && bytes[3] == 0xA3) return 'webm';
+  // Ogg: 0x4F 0x67 0x67 0x53
+  if (bytes[0] == 0x4F && bytes[1] == 0x67 && bytes[2] == 0x67 && bytes[3] == 0x53) return 'ogg';
+  // RIFF (WAV): 0x52 0x49 0x46 0x46
+  if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46) return 'wav';
+  return 'm4a';
+}
+
 class ChatProvider extends ChangeNotifier {
   final ChatService _chatService = ChatService();
   final StorageService _storageService = StorageService();
@@ -167,10 +178,11 @@ class ChatProvider extends ChangeNotifier {
     _addOptimistic(optimistic);
 
     try {
+      final ext = _detectExtension(voiceBytes);
       final url = await _storageService.uploadVoice(
         voiceBytes: voiceBytes,
         patientId: senderId,
-        fileName: 'voice.m4a',
+        fileName: 'voice.$ext',
       );
 
       final message = await _chatService.sendMediaMessage(

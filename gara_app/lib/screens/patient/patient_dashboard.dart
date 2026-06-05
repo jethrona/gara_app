@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../config/constants.dart';
 import '../../config/theme.dart';
 import '../../models/consultation_model.dart';
@@ -9,6 +10,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/consultation_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../services/supabase_service.dart';
 import '../../widgets/language_toggle.dart';
 import '../../widgets/status_tracker_card.dart';
 import '../../models/notification_model.dart';
@@ -26,6 +28,9 @@ class PatientDashboard extends StatefulWidget {
 
 class _PatientDashboardState extends State<PatientDashboard> {
   int _currentTab = 0;
+  String _doctorName = 'Doctor';
+  String _doctorPhone = '';
+  int _doctorFee = 2000;
 
   @override
   void initState() {
@@ -33,11 +38,30 @@ class _PatientDashboardState extends State<PatientDashboard> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _initAfterBuild());
   }
 
+  Future<void> _fetchDoctorProfile() async {
+    try {
+      final res = await SupabaseService().client
+          .from('profiles')
+          .select('full_name, phone_number, consultation_fee')
+          .eq('is_doctor', true)
+          .limit(1)
+          .maybeSingle();
+      if (res != null) {
+        if (mounted) setState(() {
+          _doctorName = res['full_name'] as String? ?? 'Doctor';
+          _doctorPhone = res['phone_number'] as String? ?? '';
+          _doctorFee = res['consultation_fee'] as int? ?? 2000;
+        });
+      }
+    } catch (_) {}
+  }
+
   void _initAfterBuild() {
     final auth = context.read<AuthProvider>();
     final consultationProvider = context.read<ConsultationProvider>();
     final notifProvider = context.read<NotificationProvider>();
     if (auth.userId.isNotEmpty) {
+      _fetchDoctorProfile();
       consultationProvider.loadPatientConsultations(auth.userId);
       notifProvider.init(auth.userId);
       notifProvider.setOnPaymentReceived(() {
@@ -51,6 +75,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
     final consultationProvider = context.read<ConsultationProvider>();
     final notifProvider = context.read<NotificationProvider>();
     if (auth.userId.isNotEmpty) {
+      _fetchDoctorProfile();
       consultationProvider.loadPatientConsultations(auth.userId);
       notifProvider.init(auth.userId);
       notifProvider.setOnPaymentReceived(() {
@@ -252,7 +277,12 @@ class _PatientDashboardState extends State<PatientDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (active != null) StatusTrackerCard(consultation: active),
+            if (active != null) StatusTrackerCard(
+              consultation: active,
+              doctorName: _doctorName,
+              doctorPhone: _doctorPhone,
+              doctorFee: _doctorFee,
+            ),
             const SizedBox(height: 20),
             _buildQuickStats(lang, pendingCount, inProcessCount, completedCount),
             const SizedBox(height: 20),
@@ -423,7 +453,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
                       color: AppTheme.statusPending.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Text('${AppConstants.consultationFee.toInt()} RWF',
+                    child: Text('$_doctorFee RWF',
                         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.statusPending)),
                   ),
               ],
@@ -443,8 +473,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        lang.t('Send 2,000 RWF to ${AppConstants.momoNumber} via MoMo (*182#)',
-                            'Ohereza 2,000 RWF kuri ${AppConstants.momoNumber} ukoresheje MoMo (*182#)'),
+                        lang.t('Send $_doctorFee RWF to $_doctorPhone ($_doctorName) via MoMo (*182#)',
+                            'Ohereza $_doctorFee RWF kuri $_doctorPhone ($_doctorName) ukoresheje MoMo (*182#)'),
                         style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
                       ),
                     ),

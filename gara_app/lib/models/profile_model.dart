@@ -5,6 +5,7 @@ class ProfileModel {
   final bool isDoctor;
   final DateTime? createdAt;
   final String? avatarUrl;
+  final int consultationFee;
 
   ProfileModel({
     required this.id,
@@ -13,6 +14,7 @@ class ProfileModel {
     this.isDoctor = false,
     this.createdAt,
     this.avatarUrl,
+    this.consultationFee = 2000,
   });
 
   factory ProfileModel.fromMap(Map<String, dynamic> map) {
@@ -23,6 +25,7 @@ class ProfileModel {
       isDoctor: map['is_doctor'] as bool? ?? false,
       createdAt: map['created_at'] != null ? DateTime.parse(map['created_at'] as String) : null,
       avatarUrl: map['avatar_url'] as String?,
+      consultationFee: map['consultation_fee'] as int? ?? 2000,
     );
   }
 
@@ -33,6 +36,7 @@ class ProfileModel {
       'full_name': fullName,
       'is_doctor': isDoctor,
       if (avatarUrl != null) 'avatar_url': avatarUrl,
+      if (isDoctor) 'consultation_fee': consultationFee,
     };
   }
 
@@ -43,6 +47,7 @@ class ProfileModel {
     bool? isDoctor,
     DateTime? createdAt,
     String? avatarUrl,
+    int? consultationFee,
   }) {
     return ProfileModel(
       id: id ?? this.id,
@@ -51,6 +56,7 @@ class ProfileModel {
       isDoctor: isDoctor ?? this.isDoctor,
       createdAt: createdAt ?? this.createdAt,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      consultationFee: consultationFee ?? this.consultationFee,
     );
   }
 }

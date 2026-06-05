@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io' as io;
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import '../config/theme.dart';
@@ -22,10 +24,11 @@ class VoiceRecorderWidget extends StatefulWidget {
 
 class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget> {
   final AudioRecorder _recorder = AudioRecorder();
-  String? _filePath;
   int _durationSeconds = 0;
   Timer? _timer;
   bool _isRecording = false;
+  bool _hasError = false;
+  String? _recordedPath;
 
   @override
   void initState() {
@@ -41,22 +44,50 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget> {
   }
 
   Future<void> _startRecording() async {
-    final hasPermission = await _recorder.hasPermission();
-    if (!hasPermission) {
+    try {
+      final hasPermission = await _recorder.hasPermission();
+      if (!hasPermission) {
+        _hasError = true;
+        if (mounted) setState(() {});
+        widget.onCancel();
+        return;
+      }
+
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+      if (kIsWeb) {
+        await _recorder.start(const RecordConfig(), path: path);
+      } else {
+        await _recorder.start(
+          RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 44100),
+          path: path,
+        );
+      }
+      _recordedPath = path;
+
+      _durationSeconds = 0;
+      _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+        if (mounted) setState(() => _durationSeconds = t.tick);
+      });
+      if (mounted) setState(() => _isRecording = true);
+    } catch (e) {
+      debugPrint('VoiceRecorder start error: $e');
+      _hasError = true;
+      if (mounted) setState(() {});
       widget.onCancel();
-      return;
     }
-    final dir = await getTemporaryDirectory();
-    _filePath = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-    await _recorder.start(
-      RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 44100),
-      path: _filePath!,
-    );
-    _durationSeconds = 0;
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (mounted) setState(() => _durationSeconds = t.tick);
-    });
-    setState(() => _isRecording = true);
+  }
+
+  Future<Uint8List?> _readBytes(String path) async {
+    if (kIsWeb && path.startsWith('blob:')) {
+      final response = await http.get(Uri.parse(path));
+      if (response.statusCode == 200) return response.bodyBytes;
+      return null;
+    }
+    final file = io.File(path);
+    if (file.existsSync()) return file.readAsBytes();
+    return null;
   }
 
   Future<void> _stopAndSend() async {
@@ -65,27 +96,27 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget> {
     setState(() => _isRecording = false);
 
     try {
-      await _recorder.stop();
-      if (_filePath != null) {
-        final file = io.File(_filePath!);
-        if (file.existsSync()) {
-          final bytes = await file.readAsBytes();
-          widget.onSend(bytes, _durationSeconds);
-          file.delete().catchError((_) {});
-          return;
-        }
+      final path = await _recorder.stop();
+      if (path == null || path.isEmpty) {
+        widget.onCancel();
+        return;
       }
-    } catch (_) {}
+      _recordedPath = path;
+      final bytes = await _readBytes(path);
+      if (bytes != null && bytes.isNotEmpty) {
+        widget.onSend(bytes, _durationSeconds);
+        return;
+      }
+    } catch (e) {
+      debugPrint('VoiceRecorder stop error: $e');
+    }
     widget.onCancel();
   }
 
   Future<void> _cancel() async {
     _timer?.cancel();
     if (_isRecording) {
-      await _recorder.stop().catchError((_) {});
-    }
-    if (_filePath != null) {
-      io.File(_filePath!).delete().catchError((_) {});
+      try { await _recorder.stop(); } catch (_) {}
     }
     widget.onCancel();
   }
@@ -98,6 +129,28 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget> {
 
   @override
   Widget build(BuildContext context) {
+    if (_hasError) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppTheme.errorRed.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.mic_off_rounded, color: AppTheme.errorRed, size: 20),
+            const SizedBox(width: 8),
+            const Text('Mic unavailable', style: TextStyle(color: AppTheme.errorRed, fontSize: 13)),
+            const Spacer(),
+            GestureDetector(
+              onTap: widget.onCancel,
+              child: const Text('Close', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
@@ -149,11 +202,11 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget> {
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: _stopAndSend,
+            onTap: _isRecording ? _stopAndSend : null,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
-                color: AppTheme.primaryGreen,
+                color: _isRecording ? AppTheme.primaryGreen : AppTheme.textMuted,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Row(

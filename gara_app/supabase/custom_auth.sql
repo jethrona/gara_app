@@ -47,6 +47,9 @@ DROP FUNCTION IF EXISTS public.is_doctor();
 -- Add consultation_id to notifications
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS consultation_id INTEGER REFERENCES consultations(id) ON DELETE SET NULL;
 
+-- Doctor consultation fee (default 2000 RWF)
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS consultation_fee INTEGER DEFAULT 2000;
+
 
 
 -- Create / update storage buckets as public
@@ -69,9 +72,6 @@ DROP POLICY IF EXISTS "Public Access to media files" ON storage.objects;
 DROP POLICY IF EXISTS "Authenticated users can upload files" ON storage.objects;
 DROP POLICY IF EXISTS "Authenticated users can update own files" ON storage.objects;
 DROP POLICY IF EXISTS "Authenticated users can delete own files" ON storage.objects;
-
--- Delete any objects stuck in a bad state
-DELETE FROM storage.objects WHERE bucket_id NOT IN ('media', 'clinical_documents');
 
 -- Simple permissive policies: allow all operations on our buckets
 CREATE POLICY "Allow all media" ON storage.objects
