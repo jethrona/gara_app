@@ -47,6 +47,8 @@ DROP FUNCTION IF EXISTS public.is_doctor();
 -- Add consultation_id to notifications
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS consultation_id INTEGER REFERENCES consultations(id) ON DELETE SET NULL;
 
+
+
 -- Create storage buckets if they don't exist
 INSERT INTO storage.buckets (id, name, public, avif_autodetection, file_size_limit)
 VALUES ('media', 'media', true, false, 52428800)

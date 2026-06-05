@@ -279,7 +279,6 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
       consultationId: widget.consultation.id!,
       senderId: auth.userId,
       imageBytes: bytes,
-      patientId: widget.consultation.patientId!,
     );
     if (err != null && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -296,7 +295,6 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
       consultationId: widget.consultation.id!,
       senderId: auth.userId,
       voiceBytes: voiceBytes,
-      patientId: widget.consultation.patientId!,
       durationSeconds: duration,
     );
     if (err != null && context.mounted) {

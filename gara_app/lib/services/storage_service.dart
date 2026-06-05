@@ -10,11 +10,15 @@ class StorageService {
     required String patientId,
     required String fileName,
   }) async {
-    final path = 'consultations/$patientId/images/$fileName';
+    final safeName = '${DateTime.now().millisecondsSinceEpoch}_$fileName';
+    final path = 'consultations/$patientId/images/$safeName';
     await _supabase.client.storage.from('media').uploadBinary(
       path,
       imageBytes,
-      fileOptions: const FileOptions(contentType: 'image/jpeg'),
+      fileOptions: const FileOptions(
+        contentType: 'image/jpeg',
+        upsert: true,
+      ),
     );
     return _supabase.client.storage.from('media').getPublicUrl(path);
   }
@@ -24,11 +28,15 @@ class StorageService {
     required String patientId,
     required String fileName,
   }) async {
-    final path = 'consultations/$patientId/voice/$fileName';
+    final safeName = '${DateTime.now().millisecondsSinceEpoch}_$fileName';
+    final path = 'consultations/$patientId/voice/$safeName';
     await _supabase.client.storage.from('media').uploadBinary(
       path,
       voiceBytes,
-      fileOptions: const FileOptions(contentType: 'audio/mp4'),
+      fileOptions: const FileOptions(
+        contentType: 'audio/aac',
+        upsert: true,
+      ),
     );
     return _supabase.client.storage.from('media').getPublicUrl(path);
   }
@@ -38,11 +46,15 @@ class StorageService {
     required String patientId,
     required String fileName,
   }) async {
-    final path = 'documents/$patientId/$fileName';
+    final safeName = '${DateTime.now().millisecondsSinceEpoch}_$fileName';
+    final path = 'documents/$patientId/$safeName';
     await _supabase.client.storage.from('clinical_documents').uploadBinary(
       path,
       pdfBytes,
-      fileOptions: const FileOptions(contentType: 'application/pdf'),
+      fileOptions: const FileOptions(
+        contentType: 'application/pdf',
+        upsert: true,
+      ),
     );
     return _supabase.client.storage.from('clinical_documents').getPublicUrl(path);
   }

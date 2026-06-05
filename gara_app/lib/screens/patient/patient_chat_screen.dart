@@ -233,7 +233,6 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
       consultationId: widget.consultation.id!,
       senderId: auth.userId,
       imageBytes: bytes,
-      patientId: auth.userId,
     );
     if (err != null && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -250,7 +249,6 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
       consultationId: widget.consultation.id!,
       senderId: auth.userId,
       voiceBytes: voiceBytes,
-      patientId: auth.userId,
       durationSeconds: duration,
     );
     if (err != null && context.mounted) {

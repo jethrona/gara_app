@@ -1,3 +1,4 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../config/theme.dart';
@@ -122,44 +123,95 @@ class ChatBubble extends StatelessWidget {
         );
 
       case MessageType.voice:
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.play_circle_filled_rounded,
-              color: isMe ? Colors.white : AppTheme.primaryGreen,
-              size: 28,
-            ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 80,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: isMe ? Colors.white.withValues(alpha: 0.4) : AppTheme.borderLight,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                  child: Row(
-                    children: List.generate(20, (i) => Container(
-                      width: 2,
-                      height: 4,
-                      margin: const EdgeInsets.symmetric(horizontal: 1),
-                      color: isMe ? Colors.white.withValues(alpha: 0.7 + (i * 0.015)) : AppTheme.primaryGreen.withValues(alpha: 0.3 + (i * 0.035)),
-                    )),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${message.durationSeconds}s',
-                  style: TextStyle(fontSize: 11, color: isMe ? Colors.white.withValues(alpha: 0.7) : AppTheme.textMuted),
-                ),
-              ],
-            ),
-          ],
-        );
+        return _VoicePlayer(message: message, isMe: isMe);
     }
+  }
+}
+
+class _VoicePlayer extends StatefulWidget {
+  final MessageModel message;
+  final bool isMe;
+  const _VoicePlayer({required this.message, required this.isMe});
+
+  @override
+  State<_VoicePlayer> createState() => _VoicePlayerState();
+}
+
+class _VoicePlayerState extends State<_VoicePlayer> {
+  final AudioPlayer _player = AudioPlayer();
+  bool _isPlaying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _player.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _isPlaying = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _play() async {
+    if (_isPlaying) {
+      await _player.pause();
+      if (mounted) setState(() => _isPlaying = false);
+      return;
+    }
+
+    try {
+      await _player.play(UrlSource(widget.message.content));
+      if (mounted) setState(() => _isPlaying = true);
+    } catch (_) {
+      if (mounted) setState(() => _isPlaying = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _play,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            _isPlaying ? Icons.pause_circle_filled_rounded : Icons.play_circle_filled_rounded,
+            color: widget.isMe ? Colors.white : AppTheme.primaryGreen,
+            size: 28,
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 80,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: widget.isMe ? Colors.white.withValues(alpha: 0.4) : AppTheme.borderLight,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+                child: Row(
+                  children: List.generate(20, (i) => Container(
+                    width: 2,
+                    height: 4,
+                    margin: const EdgeInsets.symmetric(horizontal: 1),
+                    color: widget.isMe ? Colors.white.withValues(alpha: 0.7 + (i * 0.015)) : AppTheme.primaryGreen.withValues(alpha: 0.3 + (i * 0.035)),
+                  )),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${widget.message.durationSeconds}s',
+                style: TextStyle(fontSize: 11, color: widget.isMe ? Colors.white.withValues(alpha: 0.7) : AppTheme.textMuted),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

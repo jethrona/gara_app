@@ -30,14 +30,14 @@ class ChatService {
     required int consultationId,
     required String senderId,
     required MessageType type,
-    required String storageUrl,
+    required String mediaUrl,
     int durationSeconds = 0,
   }) async {
     final message = MessageModel(
       consultationId: consultationId,
       senderId: senderId,
       messageType: type,
-      content: storageUrl,
+      content: mediaUrl,
       durationSeconds: durationSeconds,
     );
 

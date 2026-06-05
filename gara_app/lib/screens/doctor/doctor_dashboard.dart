@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -216,19 +216,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 60, height: 60,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(16),
-                      image: auth.profile?.avatarUrl != null
-                          ? DecorationImage(image: NetworkImage('${auth.profile!.avatarUrl!}?v=${auth.avatarVersion}'), fit: BoxFit.cover)
-                          : null,
-                    ),
-                    child: auth.profile?.avatarUrl == null
-                        ? const Icon(Icons.medical_information_rounded, color: Colors.white, size: 32)
-                        : null,
-                  ),
+                  _buildDrawerAvatar(auth.profile?.avatarUrl, 60, version: auth.avatarVersion),
                   const SizedBox(height: 12),
                   Text(auth.profile?.fullName ?? '',
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
@@ -272,6 +260,36 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
     );
   }
 
+  Widget _buildDrawerAvatar(String? avatarUrl, double size, {int version = 0}) {
+    if (avatarUrl == null) {
+      return Container(
+        width: size, height: size,
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16)),
+        child: const Icon(Icons.medical_information_rounded, color: Colors.white, size: 32),
+      );
+    }
+    if (avatarUrl.startsWith('data:image')) {
+      try {
+        final b64 = avatarUrl.split(',').last;
+        return ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.memory(base64Decode(b64), width: size, height: size, fit: BoxFit.cover));
+      } catch (_) {}
+    }
+    return ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.network('$avatarUrl?v=$version', width: size, height: size, fit: BoxFit.cover));
+  }
+
+  Widget _buildAvatarWidget(String? avatarUrl, double size, {int version = 0}) {
+    if (avatarUrl == null) {
+      return const Icon(Icons.camera_alt, size: 32, color: AppTheme.textMuted);
+    }
+    if (avatarUrl.startsWith('data:image')) {
+      try {
+        final b64 = avatarUrl.split(',').last;
+        return CircleAvatar(radius: size / 2, backgroundImage: MemoryImage(base64Decode(b64)));
+      } catch (_) {}
+    }
+    return CircleAvatar(radius: size / 2, backgroundImage: NetworkImage('$avatarUrl?v=$version'));
+  }
+
   void _showEditProfile([LanguageProvider? lang]) {
     final auth = context.read<AuthProvider>();
     final nameController = TextEditingController(text: auth.profile?.fullName ?? '');
@@ -289,12 +307,11 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
                 final xfile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
                 if (xfile != null && ctx.mounted) {
                   final bytes = await xfile.readAsBytes();
-                  final ext = xfile.path.split('.').last;
-                  final url = await auth.uploadAvatar(bytes, extension: ext);
+                  final err = await auth.uploadAvatar(bytes);
                   if (ctx.mounted) {
                     ScaffoldMessenger.of(ctx).showSnackBar(
                       SnackBar(
-                        content: Text(url != null
+                        content: Text(err == null
                             ? (lang?.t('Profile photo updated', 'Ifoto ya profili yahinduwe') ?? 'Profile photo updated')
                             : (lang?.t('Failed to update photo', 'Ifoto ntiyahindutse') ?? 'Failed to update photo')),
                       ),
@@ -302,15 +319,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
                   }
                 }
               },
-              child: CircleAvatar(
-                radius: 36,
-                backgroundImage: auth.profile?.avatarUrl != null
-                    ? NetworkImage('${auth.profile!.avatarUrl!}?v=${auth.avatarVersion}')
-                    : null,
-                child: auth.profile?.avatarUrl == null
-                    ? const Icon(Icons.camera_alt, size: 32, color: AppTheme.textMuted)
-                    : null,
-              ),
+              child: _buildAvatarWidget(auth.profile?.avatarUrl, 72, version: auth.avatarVersion),
             ),
             const SizedBox(height: 16),
             TextField(

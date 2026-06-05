@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -518,6 +518,19 @@ class _PatientDashboardState extends State<PatientDashboard> {
     );
   }
 
+  Widget _buildAvatarWidget(String? avatarUrl, double size, {int version = 0}) {
+    if (avatarUrl == null) {
+      return Icon(Icons.person_rounded, size: size * 0.5, color: AppTheme.primaryGreen);
+    }
+    if (avatarUrl.startsWith('data:image')) {
+      try {
+        final b64 = avatarUrl.split(',').last;
+        return ClipOval(child: Image.memory(base64Decode(b64), width: size, height: size, fit: BoxFit.cover));
+      } catch (_) {}
+    }
+    return ClipOval(child: Image.network('$avatarUrl?v=$version', width: size, height: size, fit: BoxFit.cover));
+  }
+
   Widget _buildProfileTab(LanguageProvider lang, AuthProvider auth) {
     final picker = ImagePicker();
 
@@ -531,12 +544,11 @@ class _PatientDashboardState extends State<PatientDashboard> {
               final xfile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
               if (xfile != null && context.mounted) {
                 final bytes = await xfile.readAsBytes();
-                final ext = xfile.path.split('.').last;
-                final url = await auth.uploadAvatar(bytes, extension: ext);
+                final err = await auth.uploadAvatar(bytes);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(url != null
+                      content: Text(err == null
                           ? lang.t('Profile photo updated', 'Ifoto ya profili yahinduwe')
                           : lang.t('Failed to update photo', 'Ifoto ntiyahindutse')),
                     ),
@@ -546,19 +558,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
             },
             child: Stack(
               children: [
-                Container(
-                  width: 88, height: 88,
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryGreen.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                    image: auth.profile?.avatarUrl != null
-                        ? DecorationImage(image: NetworkImage('${auth.profile!.avatarUrl!}?v=${auth.avatarVersion}'), fit: BoxFit.cover)
-                        : null,
-                  ),
-                  child: auth.profile?.avatarUrl == null
-                      ? const Icon(Icons.person_rounded, size: 44, color: AppTheme.primaryGreen)
-                      : null,
-                ),
+                _buildAvatarWidget(auth.profile?.avatarUrl, 88, version: auth.avatarVersion),
                 Positioned(
                   bottom: 0, right: 0,
                   child: Container(

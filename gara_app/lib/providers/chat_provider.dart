@@ -106,7 +106,6 @@ class ChatProvider extends ChangeNotifier {
     required int consultationId,
     required String senderId,
     required Uint8List imageBytes,
-    required String patientId,
   }) async {
     final tempId = DateTime.now().millisecondsSinceEpoch + 1;
     if (_pendingSending.contains(tempId)) return 'Already sending';
@@ -124,18 +123,17 @@ class ChatProvider extends ChangeNotifier {
     _addOptimistic(optimistic);
 
     try {
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
       final url = await _storageService.uploadImage(
         imageBytes: imageBytes,
-        patientId: patientId,
-        fileName: fileName,
+        patientId: senderId,
+        fileName: 'img.jpg',
       );
 
       final message = await _chatService.sendMediaMessage(
         consultationId: consultationId,
         senderId: senderId,
         type: MessageType.photo,
-        storageUrl: url,
+        mediaUrl: url,
       );
       _replaceOptimistic(tempId, message);
       return null;
@@ -151,7 +149,6 @@ class ChatProvider extends ChangeNotifier {
     required int consultationId,
     required String senderId,
     required Uint8List voiceBytes,
-    required String patientId,
     required int durationSeconds,
   }) async {
     final tempId = DateTime.now().millisecondsSinceEpoch + 2;
@@ -163,25 +160,24 @@ class ChatProvider extends ChangeNotifier {
       consultationId: consultationId,
       senderId: senderId,
       messageType: MessageType.voice,
-      content: 'Uploading voice note...',
+      content: 'Uploading voice...',
       createdAt: DateTime.now(),
     );
 
     _addOptimistic(optimistic);
 
     try {
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}.m4a';
       final url = await _storageService.uploadVoice(
         voiceBytes: voiceBytes,
-        patientId: patientId,
-        fileName: fileName,
+        patientId: senderId,
+        fileName: 'voice.m4a',
       );
 
       final message = await _chatService.sendMediaMessage(
         consultationId: consultationId,
         senderId: senderId,
         type: MessageType.voice,
-        storageUrl: url,
+        mediaUrl: url,
         durationSeconds: durationSeconds,
       );
       _replaceOptimistic(tempId, message);
