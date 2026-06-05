@@ -31,7 +31,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
     setState(() => _isLoading = true);
     try {
-      _documents = await _documentService.getPatientDocuments(auth.profile!.id);
+      _documents = await _documentService.getPatientDocuments(auth.userId);
     } catch (e) {
       // ignore
     }

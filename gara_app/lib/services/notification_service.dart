@@ -46,12 +46,14 @@ class NotificationService {
     required String title,
     required String body,
     String type = 'info',
+    int? consultationId,
   }) async {
     final notif = NotificationModel(
       userId: userId,
       title: title,
       body: body,
       type: type,
+      consultationId: consultationId,
     );
 
     await _supabase.client.from('notifications').insert(notif.toMap());

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/constants.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
@@ -24,17 +25,65 @@ class _TriageFormState extends State<TriageForm> {
   String? _selectedDuration;
   String? _selectedCategory;
   final _descriptionController = TextEditingController();
+  final _searchController = TextEditingController();
+  List<String> _filteredCategories = AppConstants.symptomCategories;
   bool _aiProcessing = false;
 
-  final TextEditingController _searchController = TextEditingController();
-  List<String> _filteredCategories = AppConstants.symptomCategories;
+  @override
+  void initState() {
+    super.initState();
+    _descriptionController.addListener(() {
+      setState(() {});
+      _saveDraft();
+    });
+    _searchController.addListener(() => setState(() {}));
+    _restoreDraft();
+  }
 
   @override
   void dispose() {
-    _pageController.dispose();
+    _descriptionController.removeListener(() {});
     _descriptionController.dispose();
     _searchController.dispose();
+    _pageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('triage_step', _currentStep);
+    if (_selectedSex != null) await prefs.setString('triage_sex', _selectedSex!);
+    if (_selectedSeverity != null) await prefs.setString('triage_severity', _selectedSeverity!);
+    if (_selectedDuration != null) await prefs.setString('triage_duration', _selectedDuration!);
+    if (_selectedCategory != null) await prefs.setString('triage_category', _selectedCategory!);
+    if (_descriptionController.text.isNotEmpty) await prefs.setString('triage_description', _descriptionController.text);
+  }
+
+  Future<void> _restoreDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final step = prefs.getInt('triage_step');
+    if (step == null) return;
+    _currentStep = step.clamp(0, 5);
+    _selectedSex = prefs.getString('triage_sex');
+    _selectedSeverity = prefs.getString('triage_severity');
+    _selectedDuration = prefs.getString('triage_duration');
+    _selectedCategory = prefs.getString('triage_category');
+    final desc = prefs.getString('triage_description');
+    if (desc != null) _descriptionController.text = desc;
+    if (_currentStep > 0) {
+      _pageController.jumpToPage(_currentStep);
+    }
+    setState(() {});
+  }
+
+  Future<void> _clearDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('triage_step');
+    await prefs.remove('triage_sex');
+    await prefs.remove('triage_severity');
+    await prefs.remove('triage_duration');
+    await prefs.remove('triage_category');
+    await prefs.remove('triage_description');
   }
 
   @override
@@ -54,7 +103,10 @@ class _TriageFormState extends State<TriageForm> {
             child: PageView(
               controller: _pageController,
               physics: const NeverScrollableScrollPhysics(),
-              onPageChanged: (i) => setState(() => _currentStep = i),
+              onPageChanged: (i) {
+                setState(() => _currentStep = i);
+                _saveDraft();
+              },
               children: [
                 SingleChildScrollView(child: _buildSexStep(lang)),
                 SingleChildScrollView(child: _buildSeverityStep(lang)),
@@ -89,7 +141,11 @@ class _TriageFormState extends State<TriageForm> {
           final isDone = i < _currentStep;
           return Expanded(
             child: GestureDetector(
-              onTap: i <= _currentStep ? () => _pageController.jumpToPage(i) : null,
+              onTap: i <= _currentStep ? () {
+                _pageController.jumpToPage(i);
+                setState(() => _currentStep = i);
+                _saveDraft();
+              } : null,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -138,7 +194,10 @@ class _TriageFormState extends State<TriageForm> {
             child: ChoiceChip(
               label: Text(sex),
               selected: _selectedSex == sex,
-              onSelected: (v) => setState(() => _selectedSex = v ? sex : null),
+              onSelected: (v) {
+                setState(() => _selectedSex = v ? sex : null);
+                _saveDraft();
+              },
               showCheckmark: true,
               selectedColor: AppTheme.primaryGreenLight,
               avatar: Icon(
@@ -175,7 +234,10 @@ class _TriageFormState extends State<TriageForm> {
               child: ChoiceChip(
                 label: Text(s.split('–')[0].trim()),
                 selected: _selectedSeverity == s,
-                onSelected: (v) => setState(() => _selectedSeverity = v ? s : null),
+                onSelected: (v) {
+                  setState(() => _selectedSeverity = v ? s : null);
+                  _saveDraft();
+                },
                 showCheckmark: true,
                 selectedColor: chipColor.withValues(alpha: 0.15),
                 avatar: Icon(chipIcon, color: _selectedSeverity == s ? chipColor : AppTheme.textSecondary, size: 20),
@@ -205,7 +267,10 @@ class _TriageFormState extends State<TriageForm> {
                 child: Text(d),
               ),
               selected: _selectedDuration == d,
-              onSelected: (v) => setState(() => _selectedDuration = v ? d : null),
+              onSelected: (v) {
+                setState(() => _selectedDuration = v ? d : null);
+                _saveDraft();
+              },
               showCheckmark: true,
               selectedColor: AppTheme.primaryGreenLight,
             ),
@@ -248,7 +313,10 @@ class _TriageFormState extends State<TriageForm> {
                 child: ChoiceChip(
                   label: SizedBox(width: MediaQuery.of(context).size.width - 80, child: Text(cat)),
                   selected: _selectedCategory == cat,
-                  onSelected: (v) => setState(() => _selectedCategory = v ? cat : null),
+                  onSelected: (v) {
+                    setState(() => _selectedCategory = v ? cat : null);
+                    _saveDraft();
+                  },
                   showCheckmark: true,
                   selectedColor: AppTheme.primaryGreenLight,
                 ),
@@ -406,7 +474,7 @@ class _TriageFormState extends State<TriageForm> {
       final auth = context.read<AuthProvider>();
 
       final result = await consultationProvider.submitTriage(
-        patientId: auth.user!.id,
+        patientId: auth.userId,
         biologicalSex: _selectedSex!,
         severityLevel: _selectedSeverity!,
         durationSymptoms: _selectedDuration!,
@@ -418,6 +486,7 @@ class _TriageFormState extends State<TriageForm> {
       setState(() => _aiProcessing = false);
 
       if (result != null && mounted) {
+        await _clearDraft();
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(

@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +9,7 @@ import '../../providers/chat_provider.dart';
 import '../../providers/consultation_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../widgets/chat_bubble.dart';
+import '../../widgets/voice_recorder_widget.dart';
 import 'prescription_dialog.dart';
 import 'transfer_slip_dialog.dart';
 
@@ -25,6 +26,7 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
   final _scrollController = ScrollController();
   final _picker = ImagePicker();
   bool _showTools = false;
+  bool _showRecorder = false;
 
   @override
   void initState() {
@@ -85,7 +87,7 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
                         itemCount: chatProvider.messages.length,
                         itemBuilder: (context, index) {
                           final msg = chatProvider.messages[index];
-                          final isMe = msg.senderId == context.read<AuthProvider>().user?.id;
+                          final isMe = msg.senderId == context.read<AuthProvider>().userId;
                           return ChatBubble(message: msg, isMe: isMe);
                         },
                       ),
@@ -184,55 +186,69 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
         border: Border(top: BorderSide(color: AppTheme.borderLight)),
       ),
       child: SafeArea(
-        child: Row(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceBg,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+        child: _showRecorder
+            ? Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.image_rounded, color: AppTheme.textSecondary),
-                    onPressed: () => _pickImage(),
+                  Expanded(
+                    child: VoiceRecorderWidget(
+                      onSend: (bytes, duration) {
+                        _sendVoice(bytes, duration);
+                        setState(() => _showRecorder = false);
+                      },
+                      onCancel: () => setState(() => _showRecorder = false),
+                    ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.mic_rounded, color: AppTheme.textSecondary),
-                    onPressed: () {},
+                ],
+              )
+            : Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceBg,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.image_rounded, color: AppTheme.textSecondary),
+                          onPressed: () => _pickImage(),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.mic_rounded, color: AppTheme.textSecondary),
+                          onPressed: () => setState(() => _showRecorder = true),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        hintText: lang.t('Type a message...', 'Andika ubutumwa...'),
+                        border: InputBorder.none,
+                        filled: true,
+                        fillColor: AppTheme.surfaceBg,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      onSubmitted: (_) => _sendMessage(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    decoration: const BoxDecoration(
+                      color: AppTheme.primaryGreen,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                      onPressed: _sendMessage,
+                    ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _messageController,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  hintText: lang.t('Type a message...', 'Andika ubutumwa...'),
-                  border: InputBorder.none,
-                  filled: true,
-                  fillColor: AppTheme.surfaceBg,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-                onSubmitted: (_) => _sendMessage(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: const BoxDecoration(
-                color: AppTheme.primaryGreen,
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                onPressed: _sendMessage,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -245,7 +261,7 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
     final auth = context.read<AuthProvider>();
     chatProvider.sendTextMessage(
       consultationId: widget.consultation.id!,
-      senderId: auth.user!.id,
+      senderId: auth.userId,
       content: text,
     );
     _messageController.clear();
@@ -253,17 +269,41 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
   }
 
   Future<void> _pickImage() async {
-    final file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 25);
-    if (file == null) return;
+    final xfile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 25);
+    if (xfile == null) return;
+    final bytes = await xfile.readAsBytes();
 
     final chatProvider = context.read<ChatProvider>();
     final auth = context.read<AuthProvider>();
-    await chatProvider.uploadAndSendImage(
+    final ok = await chatProvider.uploadAndSendImage(
       consultationId: widget.consultation.id!,
-      senderId: auth.user!.id,
-      imageFile: File(file.path),
+      senderId: auth.userId,
+      imageBytes: bytes,
       patientId: widget.consultation.patientId!,
     );
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to send image')),
+      );
+    }
+    _scrollToBottom();
+  }
+
+  Future<void> _sendVoice(Uint8List voiceBytes, int duration) async {
+    final chatProvider = context.read<ChatProvider>();
+    final auth = context.read<AuthProvider>();
+    final ok = await chatProvider.uploadAndSendVoice(
+      consultationId: widget.consultation.id!,
+      senderId: auth.userId,
+      voiceBytes: voiceBytes,
+      patientId: widget.consultation.patientId!,
+      durationSeconds: duration,
+    );
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to send voice note')),
+      );
+    }
     _scrollToBottom();
   }
 

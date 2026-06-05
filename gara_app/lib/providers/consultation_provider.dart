@@ -184,6 +184,7 @@ class ConsultationProvider extends ChangeNotifier {
           title: 'New Consultation #$consultationId',
           body: '$patientName submitted a new consultation.',
           type: 'consultation',
+          consultationId: consultationId,
         );
       }
     } catch (_) {}

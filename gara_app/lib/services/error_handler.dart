@@ -1,8 +1,22 @@
 class ErrorHandler {
+  static const _messages = <String, String>{
+    'user already registered': 'An account with this phone number already exists. Try logging in instead.',
+    'email already registered': 'An account with this phone number already exists. Try logging in instead.',
+    'email not confirmed': 'Please confirm your email address before logging in.',
+    'invalid login credentials': 'Wrong password. Try again or reset your password.',
+    'password': 'Wrong password. Try again or reset your password.',
+  };
+
   static String friendly(String? error) {
     if (error == null) return '';
     final lower = error.toLowerCase();
 
+    // Check specific messages first
+    for (final entry in _messages.entries) {
+      if (lower.contains(entry.key)) return entry.value;
+    }
+
+    // Then check patterns
     if (lower.contains('42p17') || lower.contains('infinite recursion')) {
       return 'System configuration error. Please contact support.';
     }
@@ -15,18 +29,6 @@ class ErrorHandler {
     if (lower.contains('unique') || lower.contains('duplicate')) {
       return 'This information already exists in our system.';
     }
-    if (lower.contains('422') || lower.contains('anonymous') && lower.contains('disabled')) {
-      return 'Sign-up is not allowed. Make sure the Email provider is enabled in Supabase Auth settings.';
-    }
-    if (lower.contains('auth') || lower.contains('invalid login') || lower.contains('wrong')) {
-      return 'Invalid credentials. Please check your information and try again.';
-    }
-    if (lower.contains('user already registered') || lower.contains('email already registered')) {
-      return 'An account with this phone number already exists. Try logging in instead.';
-    }
-    if (lower.contains('email not confirmed') || lower.contains('email_confirmed')) {
-      return 'Please confirm your email address before logging in.';
-    }
     if (lower.contains('storage') || lower.contains('upload')) {
       return 'Failed to upload file. Please try again.';
     }
@@ -35,6 +37,16 @@ class ErrorHandler {
     }
     if (lower.contains('not found') || lower.contains('404')) {
       return 'The requested information was not found.';
+    }
+
+    // Generic Supabase auth errors
+    if (lower.contains('signup') || lower.contains('sign_up') || lower.contains('provider')) {
+      if (lower.contains('disabled') || lower.contains('not enabled') || lower.contains('not allowed')) {
+        return 'Account creation is not allowed. Please contact support.';
+      }
+    }
+    if (lower.contains('422') || lower.contains('auth')) {
+      return 'Invalid credentials. Please check your information and try again.';
     }
 
     return 'Something went wrong. Please try again.';

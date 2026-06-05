@@ -11,6 +11,7 @@ import '../../providers/language_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../widgets/language_toggle.dart';
 import '../../widgets/status_tracker_card.dart';
+import '../../models/notification_model.dart';
 import 'triage_form.dart';
 import 'patient_chat_screen.dart';
 import 'documents_screen.dart';
@@ -29,16 +30,32 @@ class _PatientDashboardState extends State<PatientDashboard> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initAfterBuild());
+  }
+
+  void _initAfterBuild() {
+    final auth = context.read<AuthProvider>();
+    final consultationProvider = context.read<ConsultationProvider>();
+    final notifProvider = context.read<NotificationProvider>();
+    if (auth.userId.isNotEmpty) {
+      consultationProvider.loadPatientConsultations(auth.userId);
+      notifProvider.init(auth.userId);
+      notifProvider.setOnPaymentReceived(() {
+        consultationProvider.loadPatientConsultations(auth.userId);
+      });
+    }
   }
 
   void _loadData() {
     final auth = context.read<AuthProvider>();
     final consultationProvider = context.read<ConsultationProvider>();
     final notifProvider = context.read<NotificationProvider>();
-    if (auth.profile != null) {
-      consultationProvider.loadPatientConsultations(auth.profile!.id);
-      notifProvider.init(auth.profile!.id);
+    if (auth.userId.isNotEmpty) {
+      consultationProvider.loadPatientConsultations(auth.userId);
+      notifProvider.init(auth.userId);
+      notifProvider.setOnPaymentReceived(() {
+        consultationProvider.loadPatientConsultations(auth.userId);
+      });
     }
   }
 
@@ -116,7 +133,6 @@ class _PatientDashboardState extends State<PatientDashboard> {
   }
 
   void _showNotifications(LanguageProvider lang) {
-    final notifProvider = context.read<NotificationProvider>();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -128,62 +144,101 @@ class _PatientDashboardState extends State<PatientDashboard> {
         maxChildSize: 0.9,
         minChildSize: 0.5,
         expand: false,
-        builder: (_, scrollController) => Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        builder: (_, scrollController) => StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final notifProvider = context.watch<NotificationProvider>();
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(lang.t('Notifications', 'Imenyesha'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                  if (notifProvider.unreadCount > 0)
-                    TextButton(
-                      onPressed: () => notifProvider.markAllAsRead(),
-                      child: Text(lang.t('Mark all read', 'Soma zose')),
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(lang.t('Notifications', 'Imenyesha'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                      if (notifProvider.unreadCount > 0)
+                        TextButton(
+                          onPressed: () => notifProvider.markAllAsRead(),
+                          child: Text(lang.t('Mark all read', 'Soma zose')),
+                        ),
+                    ],
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: notifProvider.notifications.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.notifications_none, size: 48, color: AppTheme.textMuted),
+                                const SizedBox(height: 12),
+                                Text(lang.t('No notifications', 'Nta menyesha'), style: const TextStyle(color: AppTheme.textMuted)),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            controller: scrollController,
+                            itemCount: notifProvider.notifications.length,
+                            itemBuilder: (_, i) {
+                              final n = notifProvider.notifications[i];
+                              return ListTile(
+                                leading: Icon(
+                                  n.type == 'payment' ? Icons.payments_rounded :
+                                  n.type == 'consultation' ? Icons.medical_services_rounded :
+                                  Icons.info_rounded,
+                                  color: n.isRead ? AppTheme.textMuted : AppTheme.primaryGreen,
+                                ),
+                                title: Text(n.title, style: TextStyle(fontWeight: n.isRead ? FontWeight.w400 : FontWeight.w600)),
+                                subtitle: Text(n.body, style: const TextStyle(fontSize: 12)),
+                                trailing: n.isRead ? null : Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: AppTheme.primaryGreen)),
+                                onTap: () async {
+                                  if (n.id != null) {
+                                    await notifProvider.markAsRead(n.id!);
+                                  }
+                                  if (ctx.mounted) Navigator.pop(ctx);
+                                  _handleNotificationTap(n);
+                                },
+                              );
+                            },
+                          ),
+                  ),
                 ],
               ),
-              const Divider(),
-              Expanded(
-                child: notifProvider.notifications.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.notifications_none, size: 48, color: AppTheme.textMuted),
-                            const SizedBox(height: 12),
-                            Text(lang.t('No notifications', 'Nta menyesha'), style: const TextStyle(color: AppTheme.textMuted)),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        controller: scrollController,
-                        itemCount: notifProvider.notifications.length,
-                        itemBuilder: (_, i) {
-                          final n = notifProvider.notifications[i];
-                          return ListTile(
-                            leading: Icon(
-                              n.type == 'payment' ? Icons.payments_rounded :
-                              n.type == 'consultation' ? Icons.medical_services_rounded :
-                              Icons.info_rounded,
-                              color: n.isRead ? AppTheme.textMuted : AppTheme.primaryGreen,
-                            ),
-                            title: Text(n.title, style: TextStyle(fontWeight: n.isRead ? FontWeight.w400 : FontWeight.w600)),
-                            subtitle: Text(n.body, style: const TextStyle(fontSize: 12)),
-                            trailing: n.isRead ? null : Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: AppTheme.primaryGreen)),
-                            onTap: () {
-                              if (n.id != null) notifProvider.markAsRead(n.id!);
-                            },
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
+  }
+
+  void _handleNotificationTap(NotificationModel n) {
+    if (n.type == 'payment' || n.type == 'consultation') {
+      if (n.consultationId != null) {
+        final consultation = context.read<ConsultationProvider>().patientConsultations
+            .where((c) => c.id == n.consultationId)
+            .firstOrNull;
+        if (consultation != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PatientChatScreen(consultation: consultation),
+            ),
+          );
+          return;
+        }
+      }
+      final active = context.read<ConsultationProvider>().patientConsultations
+          .where((c) => c.status == CareStatus.inProcess || c.status == CareStatus.pendingPayment)
+          .firstOrNull;
+      if (active != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PatientChatScreen(consultation: active),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildDashboard(LanguageProvider lang, ConsultationModel? active,
@@ -473,9 +528,20 @@ class _PatientDashboardState extends State<PatientDashboard> {
           const SizedBox(height: 20),
           GestureDetector(
             onTap: () async {
-              final file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
-              if (file != null) {
-                await auth.uploadAvatar(File(file.path));
+              final xfile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+              if (xfile != null && context.mounted) {
+                final bytes = await xfile.readAsBytes();
+                final ext = xfile.path.split('.').last;
+                final url = await auth.uploadAvatar(bytes, extension: ext);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(url != null
+                          ? lang.t('Profile photo updated', 'Ifoto ya profili yahinduwe')
+                          : lang.t('Failed to update photo', 'Ifoto ntiyahindutse')),
+                    ),
+                  );
+                }
               }
             },
             child: Stack(
@@ -486,7 +552,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
                     color: AppTheme.primaryGreen.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                     image: auth.profile?.avatarUrl != null
-                        ? DecorationImage(image: NetworkImage(auth.profile!.avatarUrl!), fit: BoxFit.cover)
+                        ? DecorationImage(image: NetworkImage('${auth.profile!.avatarUrl!}?v=${auth.avatarVersion}'), fit: BoxFit.cover)
                         : null,
                   ),
                   child: auth.profile?.avatarUrl == null

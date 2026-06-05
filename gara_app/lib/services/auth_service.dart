@@ -1,7 +1,11 @@
-import 'dart:io';
+import 'dart:convert';
+import 'dart:math';
+import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../models/profile_model.dart';
 import 'supabase_service.dart';
 
@@ -9,18 +13,22 @@ class AuthService {
   final SupabaseService _supabase = SupabaseService();
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   final LocalAuthentication _localAuth = LocalAuthentication();
+  final Random _random = Random.secure();
+  final Uuid _uuid = const Uuid();
 
-  static const String _deviceTokenKey = 'gara_device_token';
+  static const String _sessionKey = 'gara_session_token';
+  static const String _userIdKey = 'gara_user_id';
   static const String _pinKey = 'gara_pin_code';
-  static const String _profileKey = 'gara_profile_cache';
   static const String _biometricEnabledKey = 'gara_biometric_enabled';
   static const String _rememberPhoneKey = 'gara_remember_phone';
   static const String _rememberPasswordKey = 'gara_remember_password';
 
+  // ── Biometrics / PIN ──
+
   Future<bool> hasBiometrics() async {
     try {
       return await _localAuth.canCheckBiometrics || await _localAuth.isDeviceSupported();
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
@@ -29,40 +37,25 @@ class AuthService {
     try {
       return await _localAuth.authenticate(
         localizedReason: 'Authenticate to access your Gara account',
-        options: const AuthenticationOptions(
-          stickyAuth: true,
-          biometricOnly: true,
-        ),
+        options: const AuthenticationOptions(stickyAuth: true, biometricOnly: true),
       );
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
   Future<bool> isBiometricEnabled() async {
-    final val = await _secureStorage.read(key: _biometricEnabledKey);
-    return val == 'true';
+    final v = await _secureStorage.read(key: _biometricEnabledKey);
+    return v == 'true';
   }
 
   Future<void> setBiometricEnabled(bool enabled) async {
     await _secureStorage.write(key: _biometricEnabledKey, value: enabled.toString());
   }
 
-  Future<String?> getDeviceToken() async {
-    return await _secureStorage.read(key: _deviceTokenKey);
-  }
-
-  Future<void> saveDeviceToken(String token) async {
-    await _secureStorage.write(key: _deviceTokenKey, value: token);
-  }
-
   Future<bool> hasPin() async {
     final pin = await _secureStorage.read(key: _pinKey);
     return pin != null && pin.isNotEmpty;
-  }
-
-  Future<String?> getStoredPin() async {
-    return await _secureStorage.read(key: _pinKey);
   }
 
   Future<void> savePin(String pin) async {
@@ -74,46 +67,138 @@ class AuthService {
     return stored == pin;
   }
 
-  String _phoneToEmail(String phone) => '${phone.replaceAll(RegExp(r'\D'), '')}@gara.app';
-
-  Future<AuthResponse> registerWithEmailPassword(String phone, String password) async {
-    final response = await _supabase.client.auth.signUp(
-      email: _phoneToEmail(phone),
-      password: password,
-    );
-    if (response.user != null && response.session == null) {
-      try {
-        return await loginWithEmailPassword(phone, password);
-      } catch (_) {
-        throw Exception('Email confirmation required. Please disable "Confirm email" in Supabase Authentication settings, or contact support.');
-      }
-    }
-    return response;
+  Future<String?> getStoredPin() async {
+    return await _secureStorage.read(key: _pinKey);
   }
 
-  Future<AuthResponse> loginWithEmailPassword(String phone, String password) async {
-    return await _supabase.client.auth.signInWithPassword(
-      email: _phoneToEmail(phone),
-      password: password,
-    );
+  // ── Password hashing ──
+
+  String _generateSalt() {
+    final bytes = List<int>.generate(16, (_) => _random.nextInt(256));
+    return base64.encode(bytes);
   }
 
-  Future<ProfileModel> createProfile({
-    required String id,
-    required String phoneNumber,
+  String _hashPassword(String password, String salt) {
+    return sha256.convert(utf8.encode(password + salt)).toString();
+  }
+
+  // ── Session management ──
+
+  Future<void> _saveSession(String userId, String token) async {
+    await _secureStorage.write(key: _sessionKey, value: token);
+    await _secureStorage.write(key: _userIdKey, value: userId);
+  }
+
+  Future<String?> _getStoredUserId() async {
+    return await _secureStorage.read(key: _userIdKey);
+  }
+
+  Future<String?> _getStoredSessionToken() async {
+    return await _secureStorage.read(key: _sessionKey);
+  }
+
+  Future<void> _clearSession() async {
+    await _secureStorage.delete(key: _sessionKey);
+    await _secureStorage.delete(key: _userIdKey);
+  }
+
+  // ── Public auth API ──
+
+  Future<ProfileModel> register({
+    required String phone,
+    required String password,
     required String fullName,
     bool isDoctor = false,
   }) async {
-    final profile = ProfileModel(
-      id: id,
-      phoneNumber: phoneNumber,
-      fullName: fullName,
-      isDoctor: isDoctor,
-    );
+    final salt = _generateSalt();
+    final hash = _hashPassword(password, salt);
+    final sessionToken = _uuid.v4();
+    final userId = _uuid.v4();
 
-    await _supabase.client.from('profiles').upsert(profile.toMap());
-    await _cacheProfile(profile);
+    final response = await _supabase.client.from('profiles').insert({
+      'id': userId,
+      'phone_number': phone,
+      'full_name': fullName,
+      'is_doctor': isDoctor,
+      'password_hash': hash,
+      'password_salt': salt,
+      'session_token': sessionToken,
+    }).select().single();
+
+    await _saveSession(userId, sessionToken);
+    return ProfileModel.fromMap(response);
+  }
+
+  Future<ProfileModel?> login(String phone, String password) async {
+    final response = await _supabase.client
+        .from('profiles')
+        .select()
+        .eq('phone_number', phone)
+        .limit(1);
+
+    final list = response as List;
+    if (list.isEmpty) return null;
+
+    final profile = ProfileModel.fromMap(list.first);
+    final storedHash = list.first['password_hash'] as String?;
+    final storedSalt = list.first['password_salt'] as String?;
+
+    if (storedHash == null || storedSalt == null) return null;
+
+    final computedHash = _hashPassword(password, storedSalt);
+    if (computedHash != storedHash) return null;
+
+    final sessionToken = _uuid.v4();
+    await _supabase.client
+        .from('profiles')
+        .update({'session_token': sessionToken})
+        .eq('id', profile.id);
+
+    await _saveSession(profile.id, sessionToken);
     return profile;
+  }
+
+  Future<ProfileModel?> autoLogin() async {
+    final token = await _getStoredSessionToken();
+    final userId = await _getStoredUserId();
+    if (token == null || userId == null) return null;
+
+    final response = await _supabase.client
+        .from('profiles')
+        .select()
+        .eq('id', userId)
+        .eq('session_token', token)
+        .limit(1);
+
+    final list = response as List;
+    if (list.isEmpty) return null;
+
+    return ProfileModel.fromMap(list.first);
+  }
+
+  Future<void> signOut() async {
+    final userId = await _getStoredUserId();
+    if (userId != null) {
+      await _supabase.client
+          .from('profiles')
+          .update({'session_token': null})
+          .eq('id', userId);
+    }
+    await _clearSession();
+    await clearRememberedCredentials();
+  }
+
+  Future<ProfileModel?> getProfile(String userId) async {
+    try {
+      final response = await _supabase.client
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .single();
+      return ProfileModel.fromMap(response);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> updateProfile({
@@ -124,7 +209,6 @@ class AuthService {
     final updates = <String, dynamic>{};
     if (fullName != null) updates['full_name'] = fullName;
     if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
-
     if (updates.isNotEmpty) {
       await _supabase.client.from('profiles').update(updates).eq('id', id);
     }
@@ -138,36 +222,49 @@ class AuthService {
           .eq('is_doctor', true)
           .limit(1);
       return (response as List).isNotEmpty;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
-  Future<ProfileModel?> getProfile(String userId) async {
-    try {
-      final response = await _supabase.client
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .single();
-      return ProfileModel.fromMap(response);
-    } catch (e) {
-      return null;
-    }
+  Future<bool> phoneExists(String phone) async {
+    final response = await _supabase.client
+        .from('profiles')
+        .select('id')
+        .eq('phone_number', phone)
+        .limit(1);
+    return (response as List).isNotEmpty;
   }
 
-  Future<void> _cacheProfile(ProfileModel profile) async {
-    await _secureStorage.write(key: _profileKey, value: profile.toMap().toString());
+  Future<void> updatePassword(String userId, String newPassword) async {
+    final salt = _generateSalt();
+    final hash = _hashPassword(newPassword, salt);
+    await _supabase.client.from('profiles').update({
+      'password_hash': hash,
+      'password_salt': salt,
+    }).eq('id', userId);
   }
 
-  Future<ProfileModel?> getCachedProfile() async {
-    return null;
+  // ── Avatar upload ──
+
+  Future<String> uploadAvatar({
+    required Uint8List imageBytes,
+    required String userId,
+    String extension = 'jpg',
+  }) async {
+    final path = 'avatars/$userId.$extension';
+    await _supabase.client.storage.from('media').uploadBinary(
+      path,
+      imageBytes,
+      fileOptions: FileOptions(
+        contentType: extension == 'png' ? 'image/png' : 'image/jpeg',
+        upsert: true,
+      ),
+    );
+    return _supabase.client.storage.from('media').getPublicUrl(path);
   }
 
-  Future<bool> isSessionActive() async {
-    final session = _supabase.client.auth.currentSession;
-    return session != null;
-  }
+  // ── Remember me ──
 
   Future<void> saveRememberedCredentials(String phone, String password) async {
     await _secureStorage.write(key: _rememberPhoneKey, value: phone);
@@ -177,48 +274,12 @@ class AuthService {
   Future<Map<String, String>?> getRememberedCredentials() async {
     final phone = await _secureStorage.read(key: _rememberPhoneKey);
     final password = await _secureStorage.read(key: _rememberPasswordKey);
-    if (phone != null && password != null) {
-      return {'phone': phone, 'password': password};
-    }
+    if (phone != null && password != null) return {'phone': phone, 'password': password};
     return null;
   }
 
   Future<void> clearRememberedCredentials() async {
     await _secureStorage.delete(key: _rememberPhoneKey);
     await _secureStorage.delete(key: _rememberPasswordKey);
-  }
-
-  Future<void> sendPasswordResetEmail(String phone) async {
-    await _supabase.client.auth.resetPasswordForEmail(
-      _phoneToEmail(phone),
-    );
-  }
-
-  Future<void> updatePassword(String newPassword) async {
-    await _supabase.client.auth.updateUser(
-      UserAttributes(password: newPassword),
-    );
-  }
-
-  Future<void> signOut() async {
-    await _supabase.client.auth.signOut();
-  }
-
-  Future<User?> getCurrentUser() async {
-    return _supabase.client.auth.currentUser;
-  }
-
-  Future<String> uploadAvatar({
-    required File imageFile,
-    required String userId,
-  }) async {
-    final ext = imageFile.path.split('.').last;
-    final path = 'avatars/$userId.$ext';
-    await _supabase.client.storage.from('media').upload(
-      path,
-      imageFile,
-      fileOptions: FileOptions(contentType: ext == 'png' ? 'image/png' : 'image/jpeg', upsert: true),
-    );
-    return _supabase.client.storage.from('media').getPublicUrl(path);
   }
 }

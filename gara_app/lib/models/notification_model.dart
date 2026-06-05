@@ -6,6 +6,7 @@ class NotificationModel {
   final String type;
   final bool isRead;
   final DateTime? createdAt;
+  final int? consultationId;
 
   NotificationModel({
     this.id,
@@ -15,6 +16,7 @@ class NotificationModel {
     this.type = 'info',
     this.isRead = false,
     this.createdAt,
+    this.consultationId,
   });
 
   factory NotificationModel.fromMap(Map<String, dynamic> map) {
@@ -26,6 +28,7 @@ class NotificationModel {
       type: map['type'] as String? ?? 'info',
       isRead: map['is_read'] as bool? ?? false,
       createdAt: map['created_at'] != null ? DateTime.parse(map['created_at'] as String) : null,
+      consultationId: map['consultation_id'] as int?,
     );
   }
 
@@ -37,6 +40,7 @@ class NotificationModel {
       'body': body,
       'type': type,
       'is_read': isRead,
+      if (consultationId != null) 'consultation_id': consultationId,
     };
   }
 
@@ -48,6 +52,7 @@ class NotificationModel {
     String? type,
     bool? isRead,
     DateTime? createdAt,
+    int? consultationId,
   }) {
     return NotificationModel(
       id: id ?? this.id,
@@ -57,6 +62,7 @@ class NotificationModel {
       type: type ?? this.type,
       isRead: isRead ?? this.isRead,
       createdAt: createdAt ?? this.createdAt,
+      consultationId: consultationId ?? this.consultationId,
     );
   }
 }

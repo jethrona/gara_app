@@ -1,15 +1,12 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../models/profile_model.dart';
 import '../services/auth_service.dart';
-import '../services/supabase_service.dart';
 import '../services/error_handler.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
-  final SupabaseService _supabaseService = SupabaseService();
 
   bool _isLoading = false;
   bool _isLoggedIn = false;
@@ -20,8 +17,9 @@ class AuthProvider extends ChangeNotifier {
   bool _rememberMe = false;
   String? _errorMessage;
   ProfileModel? _profile;
-  User? _user;
+  String _userId = '';
   String _lastPhone = '';
+  int _avatarVersion = 0;
 
   bool get isLoading => _isLoading;
   bool get isLoggedIn => _isLoggedIn;
@@ -32,8 +30,9 @@ class AuthProvider extends ChangeNotifier {
   bool get rememberMe => _rememberMe;
   String? get errorMessage => _errorMessage;
   ProfileModel? get profile => _profile;
-  User? get user => _user;
+  String get userId => _userId;
   String get lastPhone => _lastPhone;
+  int get avatarVersion => _avatarVersion;
 
   void setRememberMe(bool v) {
     _rememberMe = v;
@@ -53,40 +52,41 @@ class AuthProvider extends ChangeNotifier {
     _biometricEnabled = await _authService.isBiometricEnabled();
     _hasPin = await _authService.hasPin();
 
-    final session = _supabaseService.client.auth.currentSession;
-    if (session != null) {
-      _user = session.user;
-      if (_user != null) {
-        _profile = await _authService.getProfile(_user!.id);
-        _isLoggedIn = true;
-        _isDoctor = _profile?.isDoctor ?? false;
-      }
-    }
-
     _isLoading = false;
     notifyListeners();
   }
 
   Future<bool> tryAutoLogin() async {
+    _isLoading = true;
+    notifyListeners();
+
+    final profile = await _authService.autoLogin();
+    if (profile != null) {
+      _userId = profile.id;
+      _profile = profile;
+      _isLoggedIn = true;
+      _isDoctor = profile.isDoctor;
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    }
+
     final creds = await _authService.getRememberedCredentials();
-    if (creds == null) return false;
-
-    final phone = creds['phone']!;
-    final password = creds['password']!;
-
-    try {
-      final response = await _authService.loginWithEmailPassword(phone, password);
-      if (response.user != null) {
-        _user = response.user;
-        _lastPhone = phone;
-        _profile = await _authService.getProfile(_user!.id);
+    if (creds != null) {
+      final loginProfile = await _authService.login(creds['phone']!, creds['password']!);
+      if (loginProfile != null) {
+        _userId = loginProfile.id;
+        _profile = loginProfile;
         _isLoggedIn = true;
-        _isDoctor = _profile?.isDoctor ?? false;
+        _isDoctor = loginProfile.isDoctor;
+        _isLoading = false;
         notifyListeners();
         return true;
       }
-    } catch (_) {}
+    }
 
+    _isLoading = false;
+    notifyListeners();
     return false;
   }
 
@@ -129,30 +129,14 @@ class AuthProvider extends ChangeNotifier {
         return _errorMessage;
       }
 
-      AuthResponse response;
-      try {
-        response = await _authService.registerWithEmailPassword(phoneNumber, password);
-      } catch (e) {
-        final msg = e.toString().toLowerCase();
-        if (msg.contains('user already registered') || msg.contains('email already registered')) {
-          final loginResp = await _authService.loginWithEmailPassword(phoneNumber, password);
-          if (loginResp.user == null) {
-            _isLoading = false;
-            _setError('Account exists but could not log in. Try signing in manually.');
-            notifyListeners();
-            return _errorMessage;
-          }
-          _user = loginResp.user;
-          _profile = await _authService.getProfile(_user!.id);
-          if (_profile == null) {
-            _profile = await _authService.createProfile(
-              id: _user!.id,
-              phoneNumber: phoneNumber,
-              fullName: fullName,
-            );
-          }
+      final exists = await _authService.phoneExists(phoneNumber);
+      if (exists) {
+        final loginResult = await _authService.login(phoneNumber, password);
+        if (loginResult != null) {
+          _userId = loginResult.id;
+          _profile = loginResult;
           _isLoggedIn = true;
-          _isDoctor = _profile?.isDoctor ?? false;
+          _isDoctor = loginResult.isDoctor;
           _lastPhone = phoneNumber;
           if (_rememberMe) {
             await _authService.saveRememberedCredentials(phoneNumber, password);
@@ -161,27 +145,23 @@ class AuthProvider extends ChangeNotifier {
           notifyListeners();
           return null;
         }
-        rethrow;
-      }
-
-      if (response.user == null) {
         _isLoading = false;
-        _setError('Failed to create account');
+        _setError('An account with this phone number already exists. Try logging in instead.');
         notifyListeners();
         return _errorMessage;
       }
 
-      _user = response.user;
-      _lastPhone = phoneNumber;
-
-      _profile = await _authService.createProfile(
-        id: _user!.id,
-        phoneNumber: phoneNumber,
+      final profile = await _authService.register(
+        phone: phoneNumber,
+        password: password,
         fullName: fullName,
       );
 
+      _userId = profile.id;
+      _profile = profile;
       _isLoggedIn = true;
       _isDoctor = false;
+      _lastPhone = phoneNumber;
 
       if (_rememberMe) {
         await _authService.saveRememberedCredentials(phoneNumber, password);
@@ -207,20 +187,20 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _authService.loginWithEmailPassword(phoneNumber, password);
+      final profile = await _authService.login(phoneNumber, password);
 
-      if (response.user == null) {
+      if (profile == null) {
         _isLoading = false;
-        _setError('Invalid credentials');
+        _setError('Wrong phone number or password');
         notifyListeners();
         return _errorMessage;
       }
 
-      _user = response.user;
-      _lastPhone = phoneNumber;
-      _profile = await _authService.getProfile(_user!.id);
+      _userId = profile.id;
+      _profile = profile;
       _isLoggedIn = true;
-      _isDoctor = _profile?.isDoctor ?? false;
+      _isDoctor = profile.isDoctor;
+      _lastPhone = phoneNumber;
 
       if (_rememberMe) {
         await _authService.saveRememberedCredentials(phoneNumber, password);
@@ -260,29 +240,12 @@ class AuthProvider extends ChangeNotifier {
         return _errorMessage;
       }
 
-      AuthResponse response;
-      try {
-        response = await _authService.registerWithEmailPassword(phoneNumber, password);
-      } catch (e) {
-        final msg = e.toString().toLowerCase();
-        if (msg.contains('user already registered') || msg.contains('email already registered')) {
-          final loginResp = await _authService.loginWithEmailPassword(phoneNumber, password);
-          if (loginResp.user == null) {
-            _isLoading = false;
-            _setError('Account exists but could not log in. Try signing in manually.');
-            notifyListeners();
-            return _errorMessage;
-          }
-          _user = loginResp.user;
-          _profile = await _authService.getProfile(_user!.id);
-          if (_profile == null) {
-            _profile = await _authService.createProfile(
-              id: _user!.id,
-              phoneNumber: phoneNumber,
-              fullName: fullName,
-              isDoctor: true,
-            );
-          }
+      final exists = await _authService.phoneExists(phoneNumber);
+      if (exists) {
+        final loginResult = await _authService.login(phoneNumber, password);
+        if (loginResult != null) {
+          _userId = loginResult.id;
+          _profile = loginResult;
           _isLoggedIn = true;
           _isDoctor = true;
           _lastPhone = phoneNumber;
@@ -293,28 +256,24 @@ class AuthProvider extends ChangeNotifier {
           notifyListeners();
           return null;
         }
-        rethrow;
-      }
-
-      if (response.user == null) {
         _isLoading = false;
-        _setError('Failed to create account');
+        _setError('An account with this phone number already exists. Try logging in instead.');
         notifyListeners();
         return _errorMessage;
       }
 
-      _user = response.user;
-      _lastPhone = phoneNumber;
-
-      _profile = await _authService.createProfile(
-        id: _user!.id,
-        phoneNumber: phoneNumber,
+      final profile = await _authService.register(
+        phone: phoneNumber,
+        password: password,
         fullName: fullName,
         isDoctor: true,
       );
 
+      _userId = profile.id;
+      _profile = profile;
       _isLoggedIn = true;
       _isDoctor = true;
+      _lastPhone = phoneNumber;
 
       if (_rememberMe) {
         await _authService.saveRememberedCredentials(phoneNumber, password);
@@ -331,37 +290,16 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<String?> sendPasswordResetEmail(String phone) async {
-    try {
-      await _authService.sendPasswordResetEmail(phone);
-      return null;
-    } catch (e) {
-      return ErrorHandler.friendly(e.toString());
-    }
-  }
-
   Future<String?> verifyAndResetPassword(String phone, String pin) async {
     final storedPin = await _authService.getStoredPin();
     if (storedPin == null) return 'No PIN set on this device. Use the device where you registered.';
     if (pin != storedPin) return 'Wrong PIN';
 
-    final creds = await _authService.getRememberedCredentials();
-    if (creds != null && creds['phone'] == phone) {
-      return null;
+    final profile = await _authService.login(phone, '');
+    if (profile == null) {
+      return 'No account found with this phone number';
     }
-
-    try {
-      final response = await _supabaseService.client
-          .from('profiles')
-          .select('id')
-          .eq('phone_number', phone)
-          .maybeSingle();
-
-      if (response == null) return 'No account found with this phone number';
-      return null;
-    } catch (_) {
-      return 'Could not verify account. Try again later.';
-    }
+    return null;
   }
 
   Future<String?> resetPasswordWithPin(String newPassword) async {
@@ -369,58 +307,48 @@ class AuthProvider extends ChangeNotifier {
       return 'Password must be at least 6 characters';
     }
     try {
-      final session = _supabaseService.client.auth.currentSession;
-      if (session != null) {
-        await _authService.updatePassword(newPassword);
-        if (_rememberMe) {
-          final creds = await _authService.getRememberedCredentials();
-          if (creds != null) {
-            await _authService.saveRememberedCredentials(creds['phone']!, newPassword);
-          }
+      if (_userId.isEmpty) return 'You are not logged in.';
+
+      await _authService.updatePassword(_userId, newPassword);
+
+      if (_rememberMe) {
+        final creds = await _authService.getRememberedCredentials();
+        if (creds != null) {
+          await _authService.saveRememberedCredentials(creds['phone']!, newPassword);
         }
-        return null;
       }
-
-      final creds = await _authService.getRememberedCredentials();
-      if (creds != null) {
-        await _authService.loginWithEmailPassword(creds['phone']!, creds['password']!);
-        await _authService.updatePassword(newPassword);
-        await _authService.saveRememberedCredentials(creds['phone']!, newPassword);
-        return null;
-      }
-
-      return 'Cannot reset password while logged out. Sign in first, or use a device where you checked "Remember me".';
+      return null;
     } catch (e) {
       return ErrorHandler.friendly(e.toString());
     }
   }
 
   Future<void> updateProfile({String? fullName, String? avatarUrl}) async {
-    if (_user == null) return;
-
+    if (_userId.isEmpty) return;
     try {
       await _authService.updateProfile(
-        id: _user!.id,
+        id: _userId,
         fullName: fullName,
         avatarUrl: avatarUrl,
       );
-
-      _profile = await _authService.getProfile(_user!.id);
+      _profile = await _authService.getProfile(_userId);
       notifyListeners();
     } catch (e) {
       _setError(e.toString());
     }
   }
 
-  Future<String?> uploadAvatar(File imageFile) async {
-    if (_user == null) return null;
-
+  Future<String?> uploadAvatar(Uint8List imageBytes, {String extension = 'jpg'}) async {
+    if (_userId.isEmpty) return null;
     try {
       final url = await _authService.uploadAvatar(
-        imageFile: imageFile,
-        userId: _user!.id,
+        imageBytes: imageBytes,
+        userId: _userId,
+        extension: extension,
       );
       await updateProfile(avatarUrl: url);
+      _avatarVersion++;
+      notifyListeners();
       return url;
     } catch (e) {
       _setError(e.toString());
@@ -430,8 +358,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> signOut() async {
     await _authService.signOut();
-    await _authService.clearRememberedCredentials();
-    _user = null;
+    _userId = '';
     _profile = null;
     _isLoggedIn = false;
     _isDoctor = false;

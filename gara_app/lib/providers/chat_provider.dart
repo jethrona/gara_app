@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/message_model.dart';
@@ -13,10 +13,12 @@ class ChatProvider extends ChangeNotifier {
   List<MessageModel> _messages = [];
   int? _activeConsultationId;
   RealtimeChannel? _realtimeChannel;
+  final Set<int> _pendingSending = {};
 
   bool get isLoading => _isLoading;
   List<MessageModel> get messages => _messages;
   int? get activeConsultationId => _activeConsultationId;
+  bool get isSending => _pendingSending.isNotEmpty;
 
   Future<void> loadMessages(int consultationId) async {
     _isLoading = true;
@@ -30,8 +32,10 @@ class ChatProvider extends ChangeNotifier {
       _realtimeChannel = _chatService.subscribeToMessages(
         consultationId: consultationId,
         onMessage: (message) {
-          _messages.add(message);
-          notifyListeners();
+          if (!_messages.any((m) => m.id == message.id)) {
+            _messages.add(message);
+            notifyListeners();
+          }
         },
       );
 
@@ -58,6 +62,7 @@ class ChatProvider extends ChangeNotifier {
 
   void _removeFailed(int tempId) {
     _messages.removeWhere((m) => m.id == tempId);
+    _pendingSending.remove(tempId);
     notifyListeners();
   }
 
@@ -69,6 +74,9 @@ class ChatProvider extends ChangeNotifier {
     if (content.trim().isEmpty) return;
 
     final tempId = DateTime.now().millisecondsSinceEpoch;
+    if (_pendingSending.contains(tempId)) return;
+    _pendingSending.add(tempId);
+
     final optimistic = MessageModel(
       id: tempId,
       consultationId: consultationId,
@@ -89,16 +97,21 @@ class ChatProvider extends ChangeNotifier {
       _replaceOptimistic(tempId, message);
     } catch (e) {
       _removeFailed(tempId);
+    } finally {
+      _pendingSending.remove(tempId);
     }
   }
 
-  Future<String?> uploadAndSendImage({
+  Future<bool> uploadAndSendImage({
     required int consultationId,
     required String senderId,
-    required File imageFile,
+    required Uint8List imageBytes,
     required String patientId,
   }) async {
     final tempId = DateTime.now().millisecondsSinceEpoch + 1;
+    if (_pendingSending.contains(tempId)) return false;
+    _pendingSending.add(tempId);
+
     final optimistic = MessageModel(
       id: tempId,
       consultationId: consultationId,
@@ -113,7 +126,7 @@ class ChatProvider extends ChangeNotifier {
     try {
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
       final url = await _storageService.uploadImage(
-        imageFile: imageFile,
+        imageBytes: imageBytes,
         patientId: patientId,
         fileName: fileName,
       );
@@ -125,21 +138,26 @@ class ChatProvider extends ChangeNotifier {
         storageUrl: url,
       );
       _replaceOptimistic(tempId, message);
-      return url;
+      return true;
     } catch (e) {
       _removeFailed(tempId);
-      return null;
+      return false;
+    } finally {
+      _pendingSending.remove(tempId);
     }
   }
 
-  Future<String?> uploadAndSendVoice({
+  Future<bool> uploadAndSendVoice({
     required int consultationId,
     required String senderId,
-    required File voiceFile,
+    required Uint8List voiceBytes,
     required String patientId,
     required int durationSeconds,
   }) async {
     final tempId = DateTime.now().millisecondsSinceEpoch + 2;
+    if (_pendingSending.contains(tempId)) return false;
+    _pendingSending.add(tempId);
+
     final optimistic = MessageModel(
       id: tempId,
       consultationId: consultationId,
@@ -154,7 +172,7 @@ class ChatProvider extends ChangeNotifier {
     try {
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.m4a';
       final url = await _storageService.uploadVoice(
-        voiceFile: voiceFile,
+        voiceBytes: voiceBytes,
         patientId: patientId,
         fileName: fileName,
       );
@@ -167,10 +185,12 @@ class ChatProvider extends ChangeNotifier {
         durationSeconds: durationSeconds,
       );
       _replaceOptimistic(tempId, message);
-      return url;
+      return true;
     } catch (e) {
       _removeFailed(tempId);
-      return null;
+      return false;
+    } finally {
+      _pendingSending.remove(tempId);
     }
   }
 

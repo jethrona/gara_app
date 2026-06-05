@@ -5,13 +5,14 @@ import 'package:provider/provider.dart';
 import '../../config/constants.dart';
 import '../../config/theme.dart';
 import '../../models/consultation_model.dart';
+import '../../models/notification_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/consultation_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/notification_provider.dart';
-import '../../widgets/language_toggle.dart';
-import '../../widgets/financial_ticker.dart';
 import '../../widgets/consultation_card.dart';
+import '../../widgets/financial_ticker.dart';
+import '../../widgets/language_toggle.dart';
 import 'doctor_chat_workspace.dart';
 import '../auth/onboarding_screen.dart';
 
@@ -39,7 +40,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
     consultationProvider.loadDoctorQueues();
     consultationProvider.startRealtimeListener();
     if (auth.profile != null) {
-      notifProvider.init(auth.profile!.id);
+      notifProvider.init(auth.userId);
     }
   }
 
@@ -104,7 +105,6 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
   }
 
   void _showNotifications(LanguageProvider lang) {
-    final notifProvider = context.read<NotificationProvider>();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -116,62 +116,88 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
         maxChildSize: 0.9,
         minChildSize: 0.5,
         expand: false,
-        builder: (_, scrollController) => Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        builder: (_, scrollController) => StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final notifProvider = context.watch<NotificationProvider>();
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(lang.t('Notifications', 'Imenyesha'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                  if (notifProvider.unreadCount > 0)
-                    TextButton(
-                      onPressed: () => notifProvider.markAllAsRead(),
-                      child: Text(lang.t('Mark all read', 'Soma zose')),
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(lang.t('Notifications', 'Imenyesha'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                      if (notifProvider.unreadCount > 0)
+                        TextButton(
+                          onPressed: () => notifProvider.markAllAsRead(),
+                          child: Text(lang.t('Mark all read', 'Soma zose')),
+                        ),
+                    ],
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: notifProvider.notifications.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.notifications_none, size: 48, color: AppTheme.textMuted),
+                                const SizedBox(height: 12),
+                                Text(lang.t('No notifications', 'Nta menyesha'), style: const TextStyle(color: AppTheme.textMuted)),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            controller: scrollController,
+                            itemCount: notifProvider.notifications.length,
+                            itemBuilder: (_, i) {
+                              final n = notifProvider.notifications[i];
+                              return ListTile(
+                                leading: Icon(
+                                  n.type == 'payment' ? Icons.payments_rounded :
+                                  n.type == 'consultation' ? Icons.medical_services_rounded :
+                                  Icons.info_rounded,
+                                  color: n.isRead ? AppTheme.textMuted : AppTheme.primaryGreen,
+                                ),
+                                title: Text(n.title, style: TextStyle(fontWeight: n.isRead ? FontWeight.w400 : FontWeight.w600)),
+                                subtitle: Text(n.body, style: const TextStyle(fontSize: 12)),
+                                trailing: n.isRead ? null : Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: AppTheme.primaryGreen)),
+                                onTap: () async {
+                                  if (n.id != null) {
+                                    await notifProvider.markAsRead(n.id!);
+                                  }
+                                  if (ctx.mounted) Navigator.pop(ctx);
+                                  _handleNotificationTap(n, lang);
+                                },
+                              );
+                            },
+                          ),
+                  ),
                 ],
               ),
-              const Divider(),
-              Expanded(
-                child: notifProvider.notifications.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.notifications_none, size: 48, color: AppTheme.textMuted),
-                            const SizedBox(height: 12),
-                            Text(lang.t('No notifications', 'Nta menyesha'), style: const TextStyle(color: AppTheme.textMuted)),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        controller: scrollController,
-                        itemCount: notifProvider.notifications.length,
-                        itemBuilder: (_, i) {
-                          final n = notifProvider.notifications[i];
-                          return ListTile(
-                            leading: Icon(
-                              n.type == 'payment' ? Icons.payments_rounded :
-                              n.type == 'consultation' ? Icons.medical_services_rounded :
-                              Icons.info_rounded,
-                              color: n.isRead ? AppTheme.textMuted : AppTheme.primaryGreen,
-                            ),
-                            title: Text(n.title, style: TextStyle(fontWeight: n.isRead ? FontWeight.w400 : FontWeight.w600)),
-                            subtitle: Text(n.body, style: const TextStyle(fontSize: 12)),
-                            trailing: n.isRead ? null : Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: AppTheme.primaryGreen)),
-                            onTap: () {
-                              if (n.id != null) notifProvider.markAsRead(n.id!);
-                            },
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
+  }
+
+  void _handleNotificationTap(NotificationModel n, LanguageProvider lang) {
+    if (n.consultationId != null) {
+      final consultation = context.read<ConsultationProvider>().inProcess
+          .where((c) => c.id == n.consultationId)
+          .firstOrNull;
+      if (consultation != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DoctorChatWorkspace(consultation: consultation),
+          ),
+        );
+        return;
+      }
+    }
   }
 
   Widget _buildDrawer(LanguageProvider lang, AuthProvider auth) {
@@ -196,7 +222,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
                       color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(16),
                       image: auth.profile?.avatarUrl != null
-                          ? DecorationImage(image: NetworkImage(auth.profile!.avatarUrl!), fit: BoxFit.cover)
+                          ? DecorationImage(image: NetworkImage('${auth.profile!.avatarUrl!}?v=${auth.avatarVersion}'), fit: BoxFit.cover)
                           : null,
                     ),
                     child: auth.profile?.avatarUrl == null
@@ -260,15 +286,26 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
           children: [
             GestureDetector(
               onTap: () async {
-                final file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
-                if (file != null) {
-                  await auth.uploadAvatar(File(file.path));
+                final xfile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+                if (xfile != null && ctx.mounted) {
+                  final bytes = await xfile.readAsBytes();
+                  final ext = xfile.path.split('.').last;
+                  final url = await auth.uploadAvatar(bytes, extension: ext);
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(
+                        content: Text(url != null
+                            ? (lang?.t('Profile photo updated', 'Ifoto ya profili yahinduwe') ?? 'Profile photo updated')
+                            : (lang?.t('Failed to update photo', 'Ifoto ntiyahindutse') ?? 'Failed to update photo')),
+                      ),
+                    );
+                  }
                 }
               },
               child: CircleAvatar(
                 radius: 36,
                 backgroundImage: auth.profile?.avatarUrl != null
-                    ? NetworkImage(auth.profile!.avatarUrl!)
+                    ? NetworkImage('${auth.profile!.avatarUrl!}?v=${auth.avatarVersion}')
                     : null,
                 child: auth.profile?.avatarUrl == null
                     ? const Icon(Icons.camera_alt, size: 32, color: AppTheme.textMuted)
@@ -523,6 +560,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
                       title: lang.t('Payment Confirmed', 'Amafaranga yemejwe'),
                       body: lang.t('Your payment of ${amountController.text} RWF was confirmed. You can now chat with the doctor.', 'Amafaranga yawe yemejwe. Ushobora kuvugana na muganga.'),
                       type: 'payment',
+                      consultationId: consultation.id,
                     );
                   }
                   if (ctx.mounted) Navigator.pop(ctx);

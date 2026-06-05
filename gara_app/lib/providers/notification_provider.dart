@@ -11,10 +11,15 @@ class NotificationProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _userId;
   RealtimeChannel? _realtimeChannel;
+  VoidCallback? _onPaymentReceived;
 
   List<NotificationModel> get notifications => _notifications;
   int get unreadCount => _unreadCount;
   bool get isLoading => _isLoading;
+
+  void setOnPaymentReceived(VoidCallback callback) {
+    _onPaymentReceived = callback;
+  }
 
   Future<void> init(String userId) async {
     _userId = userId;
@@ -32,6 +37,9 @@ class NotificationProvider extends ChangeNotifier {
           _notifications.insert(0, notif);
           if (!notif.isRead) _unreadCount++;
           notifyListeners();
+          if (notif.type == 'payment' && _onPaymentReceived != null) {
+            _onPaymentReceived!();
+          }
         },
       );
 
@@ -68,12 +76,14 @@ class NotificationProvider extends ChangeNotifier {
     required String title,
     required String body,
     String type = 'info',
+    int? consultationId,
   }) async {
     await _service.createNotification(
       userId: userId,
       title: title,
       body: body,
       type: type,
+      consultationId: consultationId,
     );
   }
 

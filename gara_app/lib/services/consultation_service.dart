@@ -164,7 +164,7 @@ class ConsultationService {
       table: 'consultations',
       schema: 'public',
       callback: (payload) {
-        onUpsert(payload.newRecord['data'] as Map<String, dynamic>? ?? {});
+        onUpsert(Map<String, dynamic>.from(payload.newRecord));
       },
     ).subscribe();
 
