@@ -8,6 +8,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/consultation_provider.dart';
 import '../../providers/language_provider.dart';
+import '../../services/supabase_service.dart';
 import '../../widgets/chat_bubble.dart';
 import '../../widgets/voice_recorder_widget.dart';
 import 'prescription_dialog.dart';
@@ -27,13 +28,31 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
   final _picker = ImagePicker();
   bool _showTools = false;
   bool _showRecorder = false;
+  String? _patientAvatarUrl;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ChatProvider>().loadMessages(widget.consultation.id!);
+      _fetchPatientAvatar();
     });
+  }
+
+  Future<void> _fetchPatientAvatar() async {
+    final pid = widget.consultation.patientId;
+    if (pid == null) return;
+    try {
+      final res = await SupabaseService().client
+          .from('profiles')
+          .select('avatar_url')
+          .eq('id', pid)
+          .limit(1)
+          .maybeSingle();
+      if (res != null && res['avatar_url'] != null) {
+        if (mounted) setState(() => _patientAvatarUrl = res['avatar_url'] as String);
+      }
+    } catch (_) {}
   }
 
   @override
@@ -88,7 +107,13 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
                         itemBuilder: (context, index) {
                           final msg = chatProvider.messages[index];
                           final isMe = msg.senderId == context.read<AuthProvider>().userId;
-                          return ChatBubble(message: msg, isMe: isMe);
+                          final auth = context.read<AuthProvider>();
+                          return ChatBubble(
+                            message: msg,
+                            isMe: isMe,
+                            myAvatarUrl: auth.profile?.avatarUrl,
+                            theirAvatarUrl: _patientAvatarUrl,
+                          );
                         },
                       ),
           ),

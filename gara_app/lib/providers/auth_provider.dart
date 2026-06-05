@@ -359,7 +359,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<String?> uploadAvatar(Uint8List imageBytes, {String extension = 'jpg'}) async {
-    if (_userId.isEmpty) return null;
+    if (_userId.isEmpty) return 'Not logged in';
     try {
       final url = await _authService.uploadAvatar(
         imageBytes: imageBytes,
@@ -369,10 +369,10 @@ class AuthProvider extends ChangeNotifier {
       await updateProfile(avatarUrl: url);
       _avatarVersion++;
       notifyListeners();
-      return url;
+      return null; // null = success
     } catch (e) {
       _setError(e.toString());
-      return null;
+      return ErrorHandler.friendly(e.toString());
     }
   }
 

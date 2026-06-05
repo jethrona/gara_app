@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../services/supabase_service.dart';
 import '../../models/consultation_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
@@ -23,14 +24,29 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
   final _scrollController = ScrollController();
   final _picker = ImagePicker();
   bool _showRecorder = false;
+  String? _doctorAvatarUrl;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final chatProvider = context.read<ChatProvider>();
-      chatProvider.loadMessages(widget.consultation.id!);
+      context.read<ChatProvider>().loadMessages(widget.consultation.id!);
+      _fetchDoctorAvatar();
     });
+  }
+
+  Future<void> _fetchDoctorAvatar() async {
+    try {
+      final res = await SupabaseService().client
+          .from('profiles')
+          .select('avatar_url')
+          .eq('is_doctor', true)
+          .limit(1)
+          .maybeSingle();
+      if (res != null && res['avatar_url'] != null) {
+        if (mounted) setState(() => _doctorAvatarUrl = res['avatar_url'] as String);
+      }
+    } catch (_) {}
   }
 
   @override
@@ -95,9 +111,12 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
                         itemBuilder: (context, index) {
                           final msg = chatProvider.messages[index];
                           final isMe = msg.senderId == context.read<AuthProvider>().userId;
+                          final auth = context.read<AuthProvider>();
                           return ChatBubble(
                             message: msg,
                             isMe: isMe,
+                            myAvatarUrl: auth.profile?.avatarUrl,
+                            theirAvatarUrl: _doctorAvatarUrl,
                           );
                         },
                       ),

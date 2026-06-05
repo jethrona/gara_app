@@ -7,7 +7,15 @@ import '../models/message_model.dart';
 class ChatBubble extends StatelessWidget {
   final MessageModel message;
   final bool isMe;
-  const ChatBubble({super.key, required this.message, required this.isMe});
+  final String? myAvatarUrl;
+  final String? theirAvatarUrl;
+  const ChatBubble({
+    super.key,
+    required this.message,
+    required this.isMe,
+    this.myAvatarUrl,
+    this.theirAvatarUrl,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +25,7 @@ class ChatBubble extends StatelessWidget {
         mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (!isMe) _buildAvatar(),
+          if (!isMe) _buildAvatar(theirAvatarUrl, Icons.medical_services_rounded, AppTheme.accentBlue),
           if (!isMe) const SizedBox(width: 8),
           Flexible(
             child: Container(
@@ -43,24 +51,40 @@ class ChatBubble extends StatelessWidget {
             ),
           ),
           if (isMe) const SizedBox(width: 8),
-          if (isMe) _buildAvatar(),
+          if (isMe) _buildAvatar(myAvatarUrl, Icons.person_rounded, AppTheme.primaryGreen),
         ],
       ),
     );
   }
 
-  Widget _buildAvatar() {
+  Widget _buildAvatar(String? avatarUrl, IconData fallbackIcon, Color fallbackColor) {
+    if (avatarUrl != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: CachedNetworkImage(
+          imageUrl: avatarUrl,
+          width: 28, height: 28,
+          fit: BoxFit.cover,
+          placeholder: (_, __) => Container(
+            width: 28, height: 28,
+            color: fallbackColor.withValues(alpha: 0.1),
+            child: Icon(fallbackIcon, size: 16, color: fallbackColor),
+          ),
+          errorWidget: (_, __, ___) => Container(
+            width: 28, height: 28,
+            decoration: BoxDecoration(color: fallbackColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)),
+            child: Icon(fallbackIcon, size: 16, color: fallbackColor),
+          ),
+        ),
+      );
+    }
     return Container(
       width: 28, height: 28,
       decoration: BoxDecoration(
-        color: isMe ? AppTheme.primaryGreen.withValues(alpha: 0.1) : AppTheme.accentBlue.withValues(alpha: 0.1),
-        shape: BoxShape.circle,
+        color: fallbackColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Icon(
-        isMe ? Icons.person_rounded : Icons.medical_services_rounded,
-        size: 16,
-        color: isMe ? AppTheme.primaryGreen : AppTheme.accentBlue,
-      ),
+      child: Icon(fallbackIcon, size: 16, color: fallbackColor),
     );
   }
 
@@ -166,8 +190,7 @@ class _VoicePlayerState extends State<_VoicePlayer> {
     try {
       _hasError = false;
       await _player.stop();
-      await _player.setSourceUrl(widget.message.content);
-      await _player.resume();
+      await _player.play(UrlSource(widget.message.content));
       if (mounted) setState(() => _isPlaying = true);
     } catch (_) {
       if (mounted) setState(() { _isPlaying = false; _hasError = true; });
