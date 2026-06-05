@@ -56,10 +56,21 @@ INSERT INTO storage.buckets (id, name, public, avif_autodetection, file_size_lim
 VALUES ('clinical_documents', 'clinical_documents', true, false, 10485760)
 ON CONFLICT (id) DO NOTHING;
 
--- Drop any existing storage policies first
-DROP POLICY IF EXISTS "Allow all media" ON storage.objects;
-DROP POLICY IF EXISTS "Allow all clinical_documents" ON storage.objects;
+-- Disable RLS on storage.objects entirely (auth is handled by app-level user ID filtering)
+ALTER TABLE storage.objects DISABLE ROW LEVEL SECURITY;
 
--- Storage bucket policies (allow all since auth is app-level)
+-- Drop ALL existing storage policies (including Supabase defaults like "Give users access to own folder")
+DO $$
+DECLARE
+    pol RECORD;
+BEGIN
+    FOR pol IN SELECT * FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects'
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects', pol.policyname);
+    END LOOP;
+END $$;
+
+-- Re-enable RLS and create our simple permissive policies
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all media" ON storage.objects FOR ALL USING (bucket_id = 'media');
 CREATE POLICY "Allow all clinical_documents" ON storage.objects FOR ALL USING (bucket_id = 'clinical_documents');
