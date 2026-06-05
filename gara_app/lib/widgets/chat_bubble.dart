@@ -140,6 +140,7 @@ class _VoicePlayer extends StatefulWidget {
 class _VoicePlayerState extends State<_VoicePlayer> {
   final AudioPlayer _player = AudioPlayer();
   bool _isPlaying = false;
+  bool _hasError = false;
 
   @override
   void initState() {
@@ -163,23 +164,28 @@ class _VoicePlayerState extends State<_VoicePlayer> {
     }
 
     try {
-      await _player.play(UrlSource(widget.message.content));
+      _hasError = false;
+      await _player.stop();
+      await _player.setSourceUrl(widget.message.content);
+      await _player.resume();
       if (mounted) setState(() => _isPlaying = true);
     } catch (_) {
-      if (mounted) setState(() => _isPlaying = false);
+      if (mounted) setState(() { _isPlaying = false; _hasError = true; });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final iconColor = widget.isMe ? Colors.white : AppTheme.primaryGreen;
     return GestureDetector(
-      onTap: _play,
+      onTap: _hasError ? null : _play,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
+            _hasError ? Icons.error_outline_rounded :
             _isPlaying ? Icons.pause_circle_filled_rounded : Icons.play_circle_filled_rounded,
-            color: widget.isMe ? Colors.white : AppTheme.primaryGreen,
+            color: _hasError ? AppTheme.errorRed : iconColor,
             size: 28,
           ),
           const SizedBox(width: 8),
@@ -205,7 +211,7 @@ class _VoicePlayerState extends State<_VoicePlayer> {
               ),
               const SizedBox(height: 2),
               Text(
-                '${widget.message.durationSeconds}s',
+                _hasError ? 'error' : '${widget.message.durationSeconds}s',
                 style: TextStyle(fontSize: 11, color: widget.isMe ? Colors.white.withValues(alpha: 0.7) : AppTheme.textMuted),
               ),
             ],

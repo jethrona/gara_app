@@ -34,7 +34,7 @@ class StorageService {
       path,
       voiceBytes,
       fileOptions: const FileOptions(
-        contentType: 'audio/aac',
+        contentType: 'audio/mp4',
         upsert: true,
       ),
     );

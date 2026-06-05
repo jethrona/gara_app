@@ -49,20 +49,35 @@ ALTER TABLE notifications ADD COLUMN IF NOT EXISTS consultation_id INTEGER REFER
 
 
 
--- Create storage buckets if they don't exist
+-- Create / update storage buckets as public
 INSERT INTO storage.buckets (id, name, public, avif_autodetection, file_size_limit)
 VALUES ('media', 'media', true, false, 52428800)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET public = true, file_size_limit = 52428800;
 
 INSERT INTO storage.buckets (id, name, public, avif_autodetection, file_size_limit)
 VALUES ('clinical_documents', 'clinical_documents', true, false, 10485760)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET public = true, file_size_limit = 10485760;
 
--- Create our simple permissive policies (drop first if they exist)
+-- Drop ALL existing storage policies (including Supabase defaults) so our permissive ones take effect
 DROP POLICY IF EXISTS "Allow all media" ON storage.objects;
 DROP POLICY IF EXISTS "Allow all clinical_documents" ON storage.objects;
--- Also drop common Supabase default policies that block anon uploads
 DROP POLICY IF EXISTS "Give users access to own folder 1pu2ac_0" ON storage.objects;
 DROP POLICY IF EXISTS "Give users access to own folder 1pu2ac_1" ON storage.objects;
-CREATE POLICY "Allow all media" ON storage.objects FOR ALL USING (bucket_id = 'media');
-CREATE POLICY "Allow all clinical_documents" ON storage.objects FOR ALL USING (bucket_id = 'clinical_documents');
+DROP POLICY IF EXISTS "Give anon users access to all files in public bucket 1pu2ac_0" ON storage.objects;
+DROP POLICY IF EXISTS "Give authenticated users access to own folder 1pu2ac_1" ON storage.objects;
+DROP POLICY IF EXISTS "Public Access to media files" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can upload files" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can update own files" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can delete own files" ON storage.objects;
+
+-- Delete any objects stuck in a bad state
+DELETE FROM storage.objects WHERE bucket_id NOT IN ('media', 'clinical_documents');
+
+-- Simple permissive policies: allow all operations on our buckets
+CREATE POLICY "Allow all media" ON storage.objects
+  FOR ALL USING (bucket_id = 'media')
+  WITH CHECK (bucket_id = 'media');
+
+CREATE POLICY "Allow all clinical_documents" ON storage.objects
+  FOR ALL USING (bucket_id = 'clinical_documents')
+  WITH CHECK (bucket_id = 'clinical_documents');

@@ -46,3 +46,4 @@ app.*.map.json
 
 # Environment secrets
 .env
+gara_app_web/
