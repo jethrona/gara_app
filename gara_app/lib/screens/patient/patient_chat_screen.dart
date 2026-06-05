@@ -229,15 +229,15 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
 
     final chatProvider = context.read<ChatProvider>();
     final auth = context.read<AuthProvider>();
-    final ok = await chatProvider.uploadAndSendImage(
+    final err = await chatProvider.uploadAndSendImage(
       consultationId: widget.consultation.id!,
       senderId: auth.userId,
       imageBytes: bytes,
       patientId: auth.userId,
     );
-    if (!ok && context.mounted) {
+    if (err != null && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to send image')),
+        SnackBar(content: Text('Image failed: $err')),
       );
     }
     _scrollToBottom();
@@ -246,16 +246,16 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
   Future<void> _sendVoice(Uint8List voiceBytes, int duration) async {
     final chatProvider = context.read<ChatProvider>();
     final auth = context.read<AuthProvider>();
-    final ok = await chatProvider.uploadAndSendVoice(
+    final err = await chatProvider.uploadAndSendVoice(
       consultationId: widget.consultation.id!,
       senderId: auth.userId,
       voiceBytes: voiceBytes,
       patientId: auth.userId,
       durationSeconds: duration,
     );
-    if (!ok && context.mounted) {
+    if (err != null && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to send voice note')),
+        SnackBar(content: Text('Voice note failed: $err')),
       );
     }
     _scrollToBottom();

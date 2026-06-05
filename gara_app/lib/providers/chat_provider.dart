@@ -102,14 +102,14 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> uploadAndSendImage({
+  Future<String?> uploadAndSendImage({
     required int consultationId,
     required String senderId,
     required Uint8List imageBytes,
     required String patientId,
   }) async {
     final tempId = DateTime.now().millisecondsSinceEpoch + 1;
-    if (_pendingSending.contains(tempId)) return false;
+    if (_pendingSending.contains(tempId)) return 'Already sending';
     _pendingSending.add(tempId);
 
     final optimistic = MessageModel(
@@ -138,16 +138,16 @@ class ChatProvider extends ChangeNotifier {
         storageUrl: url,
       );
       _replaceOptimistic(tempId, message);
-      return true;
+      return null;
     } catch (e) {
       _removeFailed(tempId);
-      return false;
+      return e.toString();
     } finally {
       _pendingSending.remove(tempId);
     }
   }
 
-  Future<bool> uploadAndSendVoice({
+  Future<String?> uploadAndSendVoice({
     required int consultationId,
     required String senderId,
     required Uint8List voiceBytes,
@@ -155,7 +155,7 @@ class ChatProvider extends ChangeNotifier {
     required int durationSeconds,
   }) async {
     final tempId = DateTime.now().millisecondsSinceEpoch + 2;
-    if (_pendingSending.contains(tempId)) return false;
+    if (_pendingSending.contains(tempId)) return 'Already sending';
     _pendingSending.add(tempId);
 
     final optimistic = MessageModel(
@@ -185,10 +185,10 @@ class ChatProvider extends ChangeNotifier {
         durationSeconds: durationSeconds,
       );
       _replaceOptimistic(tempId, message);
-      return true;
+      return null;
     } catch (e) {
       _removeFailed(tempId);
-      return false;
+      return e.toString();
     } finally {
       _pendingSending.remove(tempId);
     }

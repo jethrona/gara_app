@@ -40,6 +40,19 @@ DROP FUNCTION IF EXISTS public.is_doctor();
 -- Add consultation_id to notifications
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS consultation_id INTEGER REFERENCES consultations(id) ON DELETE SET NULL;
 
--- Storage bucket policies for media bucket (allow all since auth is app-level)
+-- Create storage buckets if they don't exist
+INSERT INTO storage.buckets (id, name, public, avif_autodetection, file_size_limit)
+VALUES ('media', 'media', true, false, 52428800)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO storage.buckets (id, name, public, avif_autodetection, file_size_limit)
+VALUES ('clinical_documents', 'clinical_documents', true, false, 10485760)
+ON CONFLICT (id) DO NOTHING;
+
+-- Drop any existing storage policies first
+DROP POLICY IF EXISTS "Allow all media" ON storage.objects;
+DROP POLICY IF EXISTS "Allow all clinical_documents" ON storage.objects;
+
+-- Storage bucket policies (allow all since auth is app-level)
 CREATE POLICY "Allow all media" ON storage.objects FOR ALL USING (bucket_id = 'media');
 CREATE POLICY "Allow all clinical_documents" ON storage.objects FOR ALL USING (bucket_id = 'clinical_documents');
