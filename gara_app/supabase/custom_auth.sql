@@ -11,6 +11,13 @@ DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
 DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
 DROP POLICY IF EXISTS "Doctors can view all profiles" ON profiles;
 
+-- Drop any existing "Allow all" policies first (in case SQL was run before)
+DROP POLICY IF EXISTS "Allow all" ON profiles;
+DROP POLICY IF EXISTS "Allow all" ON consultations;
+DROP POLICY IF EXISTS "Allow all" ON messages;
+DROP POLICY IF EXISTS "Allow all" ON clinical_documents;
+DROP POLICY IF EXISTS "Allow all" ON notifications;
+
 -- Create permissive policies (auth is handled by app code)
 CREATE POLICY "Allow all" ON profiles FOR ALL USING (true);
 
