@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -25,6 +26,7 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
   final _scrollController = ScrollController();
   final _picker = ImagePicker();
   bool _showTools = false;
+  bool _showRecorder = false;
 
   @override
   void initState() {
@@ -54,7 +56,7 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
           children: [
             Text(widget.consultation.patientName ?? 'Patient #${widget.consultation.id}',
                 style: const TextStyle(fontSize: 16)),
-            Text('${widget.consultation.severityLevel.split("–")[0].trim()} • ${widget.consultation.biologicalSex}',
+            Text('${widget.consultation.severityLevel.split("–")[0].trim()} \u2022 ${widget.consultation.biologicalSex}',
                 style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
           ],
         ),
@@ -184,69 +186,69 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
         border: Border(top: BorderSide(color: AppTheme.borderLight)),
       ),
       child: SafeArea(
-        child: Row(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceBg,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+        child: _showRecorder
+            ? Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.image_rounded, color: AppTheme.textSecondary),
-                    onPressed: () => _pickImage(),
+                  Expanded(
+                    child: VoiceRecorderWidget(
+                      onSend: (bytes, duration) async {
+                        await _sendVoice(bytes, duration);
+                        setState(() => _showRecorder = false);
+                      },
+                      onCancel: () => setState(() => _showRecorder = false),
+                    ),
                   ),
-                  VoiceMicButton(
-                    onSend: (bytes, duration) async {
-                      final chatProvider = context.read<ChatProvider>();
-                      final auth = context.read<AuthProvider>();
-                      final err = await chatProvider.uploadAndSendVoice(
-                        consultationId: widget.consultation.id!,
-                        senderId: auth.userId,
-                        voiceBytes: bytes,
-                        durationSeconds: duration,
-                      );
-                      if (err != null && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Voice note failed: $err')),
-                        );
-                      }
-                      _scrollToBottom();
-                    },
+                ],
+              )
+            : Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceBg,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.image_rounded, color: AppTheme.textSecondary),
+                          onPressed: () => _pickImage(),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.mic_rounded, color: AppTheme.textSecondary),
+                          onPressed: () => setState(() => _showRecorder = true),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        hintText: lang.t('Type a message...', 'Andika ubutumwa...'),
+                        border: InputBorder.none,
+                        filled: true,
+                        fillColor: AppTheme.surfaceBg,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      onSubmitted: (_) => _sendMessage(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    decoration: const BoxDecoration(
+                      color: AppTheme.primaryGreen,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                      onPressed: _sendMessage,
+                    ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _messageController,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  hintText: lang.t('Type a message...', 'Andika ubutumwa...'),
-                  border: InputBorder.none,
-                  filled: true,
-                  fillColor: AppTheme.surfaceBg,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-                onSubmitted: (_) => _sendMessage(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: const BoxDecoration(
-                color: AppTheme.primaryGreen,
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                onPressed: _sendMessage,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -286,8 +288,22 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
     _scrollToBottom();
   }
 
-
-  
+  Future<void> _sendVoice(Uint8List voiceBytes, int duration) async {
+    final chatProvider = context.read<ChatProvider>();
+    final auth = context.read<AuthProvider>();
+    final err = await chatProvider.uploadAndSendVoice(
+      consultationId: widget.consultation.id!,
+      senderId: auth.userId,
+      voiceBytes: voiceBytes,
+      durationSeconds: duration,
+    );
+    if (err != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Voice note failed: $err')),
+      );
+    }
+    _scrollToBottom();
+  }
 
   void _showAiBrief(LanguageProvider lang) {
     showDialog(
