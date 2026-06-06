@@ -295,8 +295,9 @@ class AuthProvider extends ChangeNotifier {
     if (storedPin == null) return 'No PIN set on this device. Use the device where you registered.';
     if (pin != storedPin) return 'Wrong PIN';
 
-    final profile = await _authService.login(phone, '');
-    if (profile == null) {
+    // Verify the phone number has an account without checking password
+    final exists = await _authService.phoneExists(phone);
+    if (!exists) {
       return 'No account found with this phone number';
     }
     return null;

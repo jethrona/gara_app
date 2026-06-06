@@ -2,16 +2,64 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/profile_model.dart';
 import 'supabase_service.dart';
 
+// ── Safe storage: uses FlutterSecureStorage on mobile, SharedPreferences on web ──
+class _Storage {
+  final FlutterSecureStorage _secure = const FlutterSecureStorage();
+
+  Future<String?> read(String key) async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(key);
+    }
+    try {
+      return await _secure.read(key: key);
+    } catch (_) {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(key);
+    }
+  }
+
+  Future<void> write(String key, String value) async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, value);
+      return;
+    }
+    try {
+      await _secure.write(key: key, value: value);
+    } catch (_) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, value);
+    }
+  }
+
+  Future<void> delete(String key) async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(key);
+      return;
+    }
+    try {
+      await _secure.delete(key: key);
+    } catch (_) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(key);
+    }
+  }
+}
+
 class AuthService {
   final SupabaseService _supabase = SupabaseService();
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+  final _Storage _storage = _Storage();
   final LocalAuthentication _localAuth = LocalAuthentication();
   final Random _random = Random.secure();
   final Uuid _uuid = const Uuid();
@@ -26,6 +74,7 @@ class AuthService {
   // ── Biometrics / PIN ──
 
   Future<bool> hasBiometrics() async {
+    if (kIsWeb) return false;
     try {
       return await _localAuth.canCheckBiometrics || await _localAuth.isDeviceSupported();
     } catch (_) {
@@ -34,6 +83,7 @@ class AuthService {
   }
 
   Future<bool> authenticateWithBiometrics() async {
+    if (kIsWeb) return false;
     try {
       return await _localAuth.authenticate(
         localizedReason: 'Authenticate to access your Gara account',
@@ -45,30 +95,30 @@ class AuthService {
   }
 
   Future<bool> isBiometricEnabled() async {
-    final v = await _secureStorage.read(key: _biometricEnabledKey);
+    final v = await _storage.read(_biometricEnabledKey);
     return v == 'true';
   }
 
   Future<void> setBiometricEnabled(bool enabled) async {
-    await _secureStorage.write(key: _biometricEnabledKey, value: enabled.toString());
+    await _storage.write(_biometricEnabledKey, enabled.toString());
   }
 
   Future<bool> hasPin() async {
-    final pin = await _secureStorage.read(key: _pinKey);
+    final pin = await _storage.read(_pinKey);
     return pin != null && pin.isNotEmpty;
   }
 
   Future<void> savePin(String pin) async {
-    await _secureStorage.write(key: _pinKey, value: pin);
+    await _storage.write(_pinKey, pin);
   }
 
   Future<bool> verifyPin(String pin) async {
-    final stored = await _secureStorage.read(key: _pinKey);
+    final stored = await _storage.read(_pinKey);
     return stored == pin;
   }
 
   Future<String?> getStoredPin() async {
-    return await _secureStorage.read(key: _pinKey);
+    return await _storage.read(_pinKey);
   }
 
   // ── Password hashing ──
@@ -85,21 +135,21 @@ class AuthService {
   // ── Session management ──
 
   Future<void> _saveSession(String userId, String token) async {
-    await _secureStorage.write(key: _sessionKey, value: token);
-    await _secureStorage.write(key: _userIdKey, value: userId);
+    await _storage.write(_sessionKey, token);
+    await _storage.write(_userIdKey, userId);
   }
 
   Future<String?> _getStoredUserId() async {
-    return await _secureStorage.read(key: _userIdKey);
+    return await _storage.read(_userIdKey);
   }
 
   Future<String?> _getStoredSessionToken() async {
-    return await _secureStorage.read(key: _sessionKey);
+    return await _storage.read(_sessionKey);
   }
 
   Future<void> _clearSession() async {
-    await _secureStorage.delete(key: _sessionKey);
-    await _secureStorage.delete(key: _userIdKey);
+    await _storage.delete(_sessionKey);
+    await _storage.delete(_userIdKey);
   }
 
   // ── Public auth API ──
@@ -271,19 +321,19 @@ class AuthService {
   // ── Remember me ──
 
   Future<void> saveRememberedCredentials(String phone, String password) async {
-    await _secureStorage.write(key: _rememberPhoneKey, value: phone);
-    await _secureStorage.write(key: _rememberPasswordKey, value: password);
+    await _storage.write(_rememberPhoneKey, phone);
+    await _storage.write(_rememberPasswordKey, password);
   }
 
   Future<Map<String, String>?> getRememberedCredentials() async {
-    final phone = await _secureStorage.read(key: _rememberPhoneKey);
-    final password = await _secureStorage.read(key: _rememberPasswordKey);
+    final phone = await _storage.read(_rememberPhoneKey);
+    final password = await _storage.read(_rememberPasswordKey);
     if (phone != null && password != null) return {'phone': phone, 'password': password};
     return null;
   }
 
   Future<void> clearRememberedCredentials() async {
-    await _secureStorage.delete(key: _rememberPhoneKey);
-    await _secureStorage.delete(key: _rememberPasswordKey);
+    await _storage.delete(_rememberPhoneKey);
+    await _storage.delete(_rememberPasswordKey);
   }
 }

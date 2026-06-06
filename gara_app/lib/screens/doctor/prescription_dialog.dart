@@ -1,7 +1,4 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:pdf/pdf.dart';
-import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/clinical_document_model.dart';
@@ -233,98 +230,6 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
         date: dateStr,
       );
 
-      if (mounted) setState(() => _isGenerating = false);
-
-      if (!context.mounted) return;
-
-      await showDialog(
-        context: context,
-        builder: (ctx) => Dialog(
-          insetPadding: const EdgeInsets.all(12),
-          child: SizedBox(
-            width: double.maxFinite,
-            height: MediaQuery.of(ctx).size.height * 0.75,
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.description_rounded, color: AppTheme.primaryGreen, size: 22),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text('Prescription Preview',
-                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.share_rounded),
-                        tooltip: 'Share PDF',
-                        onPressed: () => Printing.sharePdf(bytes: pdfBytes, filename: 'prescription.pdf'),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.print_rounded),
-                        tooltip: 'Print',
-                        onPressed: () => Printing.layoutPdf(onLayout: (_) => pdfBytes),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: PdfPreview(
-                    build: (_) async => pdfBytes,
-                    allowPrinting: true,
-                    allowSharing: true,
-                    initialPageFormat: PdfPageFormat.a4,
-                    onPrinted: (_) {},
-                    onShared: (_) {},
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        Navigator.pop(ctx);
-                        if (!context.mounted) return;
-                        await _savePrescription(pdfBytes, date);
-                      },
-                      icon: const Icon(Icons.save_rounded, size: 18),
-                      label: const Text('Save Prescription'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryGreen,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isGenerating = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppTheme.errorRed,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _savePrescription(Uint8List pdfBytes, DateTime date) async {
-    try {
       final fileName = 'prescription_${widget.consultation.id}_${date.millisecondsSinceEpoch}.pdf';
       final url = await _documentService.savePdfToStorage(
         pdfBytes: pdfBytes,
@@ -339,12 +244,13 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
         pdfStorageUrl: url,
       );
 
-      await _documentService.savePdfLocally(pdfBytes, fileName);
+      final localFile = await _documentService.savePdfLocally(pdfBytes, fileName);
+      debugPrint("[Prescription] saved to: ${localFile.path}");
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Prescription saved!'),
+            content: Text('Prescription generated and saved!'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -354,13 +260,15 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error saving: $e'),
+            content: Text('Error: $e'),
             backgroundColor: AppTheme.errorRed,
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
     }
+
+    if (mounted) setState(() => _isGenerating = false);
   }
 }
 
