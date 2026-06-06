@@ -117,6 +117,13 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
             AppTheme.accentOrange,
             () => _showTransferDialog(lang),
           ),
+          const SizedBox(width: 8),
+          _toolChip(
+            Icons.check_circle_rounded,
+            lang.t('Complete', 'Byarangiye'),
+            AppTheme.successGreen,
+            _markComplete,
+          ),
           const Spacer(),
           _toolChip(
             _showTools ? Icons.close : Icons.build_rounded,
