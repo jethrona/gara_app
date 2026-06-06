@@ -74,12 +74,12 @@ class ConsultationService {
         .eq('id', consultationId);
   }
 
-  Future<void> updatePaymentInfo({
+  Future<bool> updatePaymentInfo({
     required int consultationId,
     required String transactionId,
     required double amount,
   }) async {
-    await _supabase.client
+    final res = await _supabase.client
         .from('consultations')
         .update({
           'momo_transaction_id': transactionId,
@@ -87,7 +87,10 @@ class ConsultationService {
           'status': 'in_process',
           'paid_at': DateTime.now().toUtc().toIso8601String(),
         })
-        .eq('id', consultationId);
+        .eq('id', consultationId)
+        .eq('status', 'pending_payment')
+        .select();
+    return (res as List).isNotEmpty;
   }
 
   Future<void> updateAiBrief(int consultationId, String brief) async {

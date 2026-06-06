@@ -39,16 +39,21 @@ class ChatProvider extends ChangeNotifier {
     try {
       _messages = await _chatService.getMessages(consultationId);
 
-      _realtimeChannel?.unsubscribe();
-      _realtimeChannel = _chatService.subscribeToMessages(
+      final prev = _realtimeChannel;
+      _realtimeChannel = null;
+      if (prev != null) await prev.unsubscribe();
+
+      final channel = _chatService.subscribeToMessages(
         consultationId: consultationId,
         onMessage: (message) {
+          if (_activeConsultationId != consultationId) return;
           if (!_messages.any((m) => m.id == message.id)) {
             _messages.add(message);
             notifyListeners();
           }
         },
       );
+      _realtimeChannel = channel;
 
       _isLoading = false;
       notifyListeners();

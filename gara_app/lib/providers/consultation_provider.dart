@@ -129,21 +129,25 @@ class ConsultationProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> verifyPayment({
+  Future<bool> verifyPayment({
     required int consultationId,
     required String transactionId,
     required double amount,
   }) async {
     try {
-      await _consultationService.updatePaymentInfo(
+      final updated = await _consultationService.updatePaymentInfo(
         consultationId: consultationId,
         transactionId: transactionId,
         amount: amount,
       );
-      await loadDoctorQueues();
+      if (updated) {
+        await loadDoctorQueues();
+      }
+      return updated;
     } catch (e) {
       _errorMessage = e.toString();
       notifyListeners();
+      return false;
     }
   }
 

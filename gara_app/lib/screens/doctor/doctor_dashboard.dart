@@ -25,6 +25,7 @@ class DoctorDashboard extends StatefulWidget {
 
 class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool _isConfirmingPayment = false;
 
   @override
   void initState() {
@@ -645,26 +646,35 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () async {
-                  final provider = context.read<ConsultationProvider>();
-                  final notifProvider = context.read<NotificationProvider>();
-                  await provider.verifyPayment(
-                    consultationId: consultation.id!,
-                    transactionId: transactionController.text.trim(),
-                    amount: double.tryParse(amountController.text) ?? AppConstants.consultationFee,
-                  );
-                  if (consultation.patientId != null) {
-                    notifProvider.createNotification(
-                      userId: consultation.patientId!,
-                      title: lang.t('Payment Confirmed', 'Amafaranga yemejwe'),
-                      body: lang.t('Your payment of ${amountController.text} RWF was confirmed. You can now chat with the doctor.', 'Amafaranga yawe yemejwe. Ushobora kuvugana na muganga.'),
-                      type: 'payment',
-                      consultationId: consultation.id,
-                    );
-                  }
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: Text(lang.t('Confirm Payment', 'Emeza Amafaranga')),
+                onPressed: _isConfirmingPayment
+                    ? null
+                    : () async {
+                        setState(() => _isConfirmingPayment = true);
+                        try {
+                          final provider = context.read<ConsultationProvider>();
+                          final notifProvider = context.read<NotificationProvider>();
+                          final updated = await provider.verifyPayment(
+                            consultationId: consultation.id!,
+                            transactionId: transactionController.text.trim(),
+                            amount: double.tryParse(amountController.text) ?? AppConstants.consultationFee,
+                          );
+                          if (updated && consultation.patientId != null) {
+                            notifProvider.createNotification(
+                              userId: consultation.patientId!,
+                              title: lang.t('Payment Confirmed', 'Amafaranga yemejwe'),
+                              body: lang.t('Your payment of ${amountController.text} RWF was confirmed. You can now chat with the doctor.', 'Amafaranga yawe yemejwe. Ushobora kuvugana na muganga.'),
+                              type: 'payment',
+                              consultationId: consultation.id,
+                            );
+                          }
+                          if (ctx.mounted) Navigator.pop(ctx);
+                        } finally {
+                          setState(() => _isConfirmingPayment = false);
+                        }
+                      },
+                child: _isConfirmingPayment
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : Text(lang.t('Confirm Payment', 'Emeza Amafaranga')),
               ),
             ),
           ],

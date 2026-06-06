@@ -65,8 +65,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
       consultationProvider.loadPatientConsultations(auth.userId);
       consultationProvider.startPatientRealtimeListener(auth.userId);
       notifProvider.init(auth.userId);
-      notifProvider.setOnPaymentReceived(() {
-        consultationProvider.loadPatientConsultations(auth.userId);
+      notifProvider.setOnPaymentReceived(() async {
+        await consultationProvider.loadPatientConsultations(auth.userId);
         _autoNavigateToChat(auth.userId);
       });
     }
@@ -81,8 +81,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
       consultationProvider.loadPatientConsultations(auth.userId);
       consultationProvider.startPatientRealtimeListener(auth.userId);
       notifProvider.init(auth.userId);
-      notifProvider.setOnPaymentReceived(() {
-        consultationProvider.loadPatientConsultations(auth.userId);
+      notifProvider.setOnPaymentReceived(() async {
+        await consultationProvider.loadPatientConsultations(auth.userId);
         _autoNavigateToChat(auth.userId);
       });
     }
