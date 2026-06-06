@@ -1,35 +1,28 @@
 import 'dart:async';
 import 'dart:io' as io;
-import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import '../config/theme.dart';
 
-enum _VoiceState { idle, recording, preview, sending, error }
-
-class VoiceRecorderWidget extends StatefulWidget {
+class VoiceMicButton extends StatefulWidget {
   final Future<void> Function(Uint8List bytes, int durationSeconds) onSend;
-  final VoidCallback onCancel;
 
-  const VoiceRecorderWidget({
-    super.key,
-    required this.onSend,
-    required this.onCancel,
-  });
+  const VoiceMicButton({super.key, required this.onSend});
 
   @override
-  State<VoiceRecorderWidget> createState() => _VoiceRecorderWidgetState();
+  State<VoiceMicButton> createState() => _VoiceMicButtonState();
 }
 
-class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget>
+enum _VMS { idle, recording, preview, sending }
+
+class _VoiceMicButtonState extends State<VoiceMicButton>
     with SingleTickerProviderStateMixin {
-  _VoiceState _state = _VoiceState.idle;
-  String _errorMsg = '';
+  _VMS _mode = _VMS.idle;
 
   final AudioRecorder _recorder = AudioRecorder();
   int _recSecs = 0;
@@ -39,12 +32,12 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget>
 
   final AudioPlayer _player = AudioPlayer();
   bool _isPlaying = false;
-  int _positionSec = 0;
+  double _progress = 0;
+  int _posSec = 0;
   StreamSubscription? _posSub;
-  StreamSubscription? _completeSub;
+  StreamSubscription? _doneSub;
 
   late final AnimationController _pulse;
-  late final Animation<double> _pulseVal;
 
   @override
   void initState() {
@@ -52,17 +45,18 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget>
     _pulse = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 700))
       ..repeat(reverse: true);
-    _pulseVal = Tween(begin: 0.35, end: 1.0)
-        .animate(CurvedAnimation(parent: _pulse, curve: Curves.easeInOut));
 
     _posSub = _player.onPositionChanged.listen((pos) {
-      if (mounted) setState(() => _positionSec = pos.inSeconds);
+      if (!mounted) return;
+      final total = _recSecs > 0 ? _recSecs : 1;
+      setState(() {
+        _posSec = pos.inSeconds;
+        _progress = (pos.inSeconds / total).clamp(0.0, 1.0);
+      });
     });
-    _completeSub = _player.onPlayerComplete.listen((_) {
-      if (mounted) setState(() { _isPlaying = false; _positionSec = 0; });
+    _doneSub = _player.onPlayerComplete.listen((_) {
+      if (mounted) setState(() { _isPlaying = false; _progress = 0; _posSec = 0; });
     });
-
-    _requestAndStart();
   }
 
   @override
@@ -71,30 +65,15 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget>
     _pulse.dispose();
     _recorder.dispose();
     _posSub?.cancel();
-    _completeSub?.cancel();
+    _doneSub?.cancel();
     _player.dispose();
     super.dispose();
-  }
-
-  Future<void> _requestAndStart() async {
-    if (kIsWeb) {
-      await _startRecording();
-      return;
-    }
-    final status = await Permission.microphone.request();
-    if (status.isGranted) {
-      await _startRecording();
-    } else if (status.isPermanentlyDenied) {
-      _fail('Microphone permission permanently denied.\nEnable it in App Settings > GARA > Microphone.');
-    } else {
-      _fail('Microphone permission required.\nTap the mic button again to retry.');
-    }
   }
 
   Future<void> _startRecording() async {
     try {
       final dir = await getTemporaryDirectory();
-      final path = '${dir.path}/gara_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final path = '${dir.path}/gara_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
       await _recorder.start(
         kIsWeb
@@ -107,28 +86,33 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget>
         path: path,
       );
 
+      final isRecording = await _recorder.isRecording();
+      if (!isRecording) {
+        if (mounted) _showPermissionError();
+        return;
+      }
+
       _recPath = path;
       _recSecs = 0;
       _recTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) setState(() => _recSecs++);
       });
 
-      if (mounted) setState(() => _state = _VoiceState.recording);
+      HapticFeedback.mediumImpact();
+      if (mounted) setState(() => _mode = _VMS.recording);
     } catch (e) {
-      _fail('Could not start recording: $e');
+      debugPrint('[Voice] start error: $e');
+      if (mounted) _showPermissionError();
     }
   }
 
   Future<void> _stopRecording() async {
-    if (_state != _VoiceState.recording) return;
     _recTimer?.cancel();
+    HapticFeedback.lightImpact();
 
     try {
       final path = await _recorder.stop();
-      if (path == null || path.isEmpty) {
-        _fail('Recorder returned no file path.');
-        return;
-      }
+      if (path == null || path.isEmpty) { _reset(); return; }
       _recPath = path;
 
       Uint8List? bytes;
@@ -140,21 +124,19 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget>
         bytes = f.existsSync() ? await f.readAsBytes() : null;
       }
 
-      if (bytes == null || bytes.isEmpty) {
-        _fail('Recording is empty. Try again.');
-        return;
-      }
+      if (bytes == null || bytes.isEmpty) { _reset(); return; }
       _recBytes = bytes;
 
-      if (kIsWeb) {
-        await _player.setSourceUrl(path);
-      } else {
+      if (!kIsWeb) {
         await _player.setSourceDeviceFile(path);
+      } else {
+        await _player.setSourceUrl(path);
       }
 
-      if (mounted) setState(() => _state = _VoiceState.preview);
+      if (mounted) setState(() { _mode = _VMS.preview; _progress = 0; _posSec = 0; });
     } catch (e) {
-      _fail('Failed to process recording: $e');
+      debugPrint('[Voice] stop error: $e');
+      _reset();
     }
   }
 
@@ -167,275 +149,274 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget>
         await _player.resume();
         if (mounted) setState(() => _isPlaying = true);
       }
-    } catch (e) {
-      debugPrint('VoiceRecorder playback error: $e');
-    }
+    } catch (_) {}
   }
 
   Future<void> _send() async {
-    if (_recBytes == null || _state == _VoiceState.sending) return;
+    if (_recBytes == null) return;
     await _player.stop();
-    if (mounted) setState(() => _state = _VoiceState.sending);
+    final bytes = _recBytes!;
+    final dur = _recSecs;
+    setState(() => _mode = _VMS.sending);
+
     try {
-      await widget.onSend(_recBytes!, _recSecs);
+      await widget.onSend(bytes, dur);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send: $e')),
+          SnackBar(content: Text('Could not send: $e')),
         );
-        setState(() => _state = _VoiceState.preview);
       }
     }
+    _reset();
   }
 
-  Future<void> _cancel() async {
-    if (_state == _VoiceState.sending) return;
-    await _player.stop();
+  void _discard() {
+    _player.stop();
+    _deleteTmp();
+    _reset();
+  }
+
+  void _reset() {
     _recTimer?.cancel();
-    if (_state == _VoiceState.recording) {
-      try { await _recorder.stop(); } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _mode = _VMS.idle;
+        _recBytes = null;
+        _recPath = null;
+        _recSecs = 0;
+        _isPlaying = false;
+        _progress = 0;
+        _posSec = 0;
+      });
     }
-    _deleteTempFile();
-    widget.onCancel();
   }
 
-  Future<void> _reRecord() async {
-    await _player.stop();
-    _deleteTempFile();
-    setState(() {
-      _state = _VoiceState.idle;
-      _recBytes = null;
-      _recPath = null;
-      _recSecs = 0;
-      _isPlaying = false;
-      _positionSec = 0;
-    });
-    await _requestAndStart();
-  }
-
-  void _deleteTempFile() {
+  void _deleteTmp() {
     if (_recPath != null && !kIsWeb) {
       try { io.File(_recPath!).deleteSync(); } catch (_) {}
     }
   }
 
-  void _fail(String msg) {
-    _errorMsg = msg;
-    if (mounted) setState(() => _state = _VoiceState.error);
+  void _showPermissionError() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Microphone permission required.\n'
+          'Go to Settings \u2192 App Permissions \u2192 GARA and enable Microphone.',
+        ),
+        duration: Duration(seconds: 5),
+      ),
+    );
   }
 
   String _fmt(int s) =>
       '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
 
-  double get _progress =>
-      _recSecs > 0 ? (_positionSec / _recSecs).clamp(0.0, 1.0) : 0.0;
-
   @override
   Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 180),
-      child: KeyedSubtree(
-        key: ValueKey(_state),
-        child: _buildState(),
+    switch (_mode) {
+      case _VMS.idle:      return _buildMicBtn();
+      case _VMS.recording: return _buildRecordingBar();
+      case _VMS.preview:   return _buildPreviewBar();
+      case _VMS.sending:   return _buildSendingBar();
+    }
+  }
+
+  Widget _buildMicBtn() {
+    return GestureDetector(
+      onTap: _startRecording,
+      child: Container(
+        width: 40, height: 40,
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceBg,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Icon(Icons.mic_rounded, color: AppTheme.textSecondary, size: 22),
       ),
     );
   }
 
-  Widget _buildState() {
-    switch (_state) {
-      case _VoiceState.idle:      return _buildIdle();
-      case _VoiceState.recording: return _buildRecording();
-      case _VoiceState.preview:   return _buildPreview();
-      case _VoiceState.sending:   return _buildSending();
-      case _VoiceState.error:     return _buildError();
-    }
-  }
-
-  Widget _buildIdle() => _shell(
-    child: Row(children: [
-      const SizedBox(width: 16, height: 16,
-        child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primaryGreen)),
-      const SizedBox(width: 10),
-      const Expanded(child: Text('Requesting mic permission\u2026',
-          style: TextStyle(fontSize: 13, color: AppTheme.textSecondary))),
-      closeBtn(_cancel),
-    ]),
-  );
-
-  Widget _buildRecording() => _shell(
-    borderColor: AppTheme.errorRed.withValues(alpha: 0.5),
-    child: Row(children: [
-      closeBtn(_cancel),
-      const SizedBox(width: 6),
-      AnimatedBuilder(
-        animation: _pulseVal,
-        builder: (_, __) => Container(
-          width: 9, height: 9,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AppTheme.errorRed.withValues(alpha: _pulseVal.value),
-          ),
-        ),
+  Widget _buildRecordingBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppTheme.errorRed.withValues(alpha: 0.4)),
       ),
-      const SizedBox(width: 8),
-      Text('REC  ${_fmt(_recSecs)}',
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
-              color: AppTheme.errorRed, letterSpacing: 0.8)),
-      Expanded(child: _buildWaveform()),
-      GestureDetector(
-        onTap: _stopRecording,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-              color: AppTheme.errorRed,
-              borderRadius: BorderRadius.circular(14)),
-          child: const Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.stop_rounded, color: Colors.white, size: 16),
-            SizedBox(width: 4),
-            Text('Stop', style: TextStyle(
-                fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
-          ]),
-        ),
-      ),
-    ]),
-  );
-
-  Widget _buildPreview() => _shell(
-    borderColor: AppTheme.primaryGreen.withValues(alpha: 0.5),
-    child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Row(children: [
-        IconButton(
-          icon: const Icon(Icons.delete_outline_rounded,
-              color: AppTheme.textSecondary, size: 20),
-          onPressed: _reRecord,
-          tooltip: 'Re-record',
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-        ),
-        const SizedBox(width: 8),
-        GestureDetector(
-          onTap: _togglePlay,
-          child: Container(
-            width: 38, height: 38,
-            decoration: const BoxDecoration(
-                color: AppTheme.primaryGreen, shape: BoxShape.circle),
-            child: Icon(
-              _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              color: Colors.white, size: 22,
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () async {
+              _recTimer?.cancel();
+              try { await _recorder.stop(); } catch (_) {}
+              _deleteTmp();
+              _reset();
+            },
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceBg,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(Icons.delete_outline_rounded,
+                  color: AppTheme.textSecondary, size: 20),
             ),
           ),
-        ),
-        const SizedBox(width: 10),
-        Text('${_fmt(_positionSec)} / ${_fmt(_recSecs)}',
-            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-        const Spacer(),
-        GestureDetector(
-          onTap: _send,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-            decoration: BoxDecoration(
-                color: AppTheme.primaryGreen,
-                borderRadius: BorderRadius.circular(16)),
-            child: const Row(mainAxisSize: MainAxisSize.min, children: [
-              Text('Send', style: TextStyle(
-                  fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600)),
-              SizedBox(width: 4),
-              Icon(Icons.send_rounded, color: Colors.white, size: 14),
-            ]),
+          const SizedBox(width: 10),
+          AnimatedBuilder(
+            animation: _pulse,
+            builder: (_, _) => Container(
+              width: 10, height: 10,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppTheme.errorRed.withValues(alpha: 0.3 + 0.7 * _pulse.value),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(_fmt(_recSecs),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
+                  color: AppTheme.errorRed, letterSpacing: 1.0)),
+          Expanded(child: _WaveformWidget(tick: _recSecs)),
+          GestureDetector(
+            onTap: _stopRecording,
+            child: Container(
+              width: 42, height: 42,
+              decoration: const BoxDecoration(color: AppTheme.primaryGreen, shape: BoxShape.circle),
+              child: const Icon(Icons.stop_rounded, color: Colors.white, size: 22),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreviewBar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppTheme.primaryGreen.withValues(alpha: 0.4)),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Row(children: [
+          GestureDetector(
+            onTap: _discard,
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceBg,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(Icons.delete_outline_rounded,
+                  color: AppTheme.textSecondary, size: 20),
+            ),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: _togglePlay,
+            child: Container(
+              width: 40, height: 40,
+              decoration: const BoxDecoration(color: AppTheme.primaryGreen, shape: BoxShape.circle),
+              child: Icon(
+                _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                color: Colors.white, size: 24,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(_fmt(_posSec),
+              style: const TextStyle(fontSize: 12, color: AppTheme.primaryGreen, fontWeight: FontWeight.w600)),
+          Text(' / ${_fmt(_recSecs)}',
+              style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+          const Spacer(),
+          GestureDetector(
+            onTap: _send,
+            child: Container(
+              width: 42, height: 42,
+              decoration: const BoxDecoration(color: AppTheme.primaryGreen, shape: BoxShape.circle),
+              child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 3,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+            activeTrackColor: AppTheme.primaryGreen,
+            inactiveTrackColor: AppTheme.borderLight,
+            thumbColor: AppTheme.primaryGreen,
+            overlayColor: AppTheme.primaryGreen.withValues(alpha: 0.15),
+          ),
+          child: Slider(
+            value: _progress,
+            onChanged: (v) async {
+              final seekMs = (v * _recSecs * 1000).round();
+              await _player.seek(Duration(milliseconds: seekMs));
+              setState(() => _progress = v);
+            },
           ),
         ),
       ]),
-      const SizedBox(height: 6),
-      ClipRRect(
-        borderRadius: BorderRadius.circular(3),
-        child: LinearProgressIndicator(
-          value: _progress,
-          minHeight: 3,
-          backgroundColor: AppTheme.borderLight,
-          color: AppTheme.primaryGreen,
-        ),
+    );
+  }
+
+  Widget _buildSendingBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppTheme.borderLight),
       ),
-    ]),
-  );
+      child: const Row(children: [
+        SizedBox(width: 16, height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primaryGreen)),
+        SizedBox(width: 12),
+        Text('Sending voice note\u2026',
+            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+      ]),
+    );
+  }
+}
 
-  Widget _buildSending() => _shell(
-    borderColor: AppTheme.primaryGreen.withValues(alpha: 0.3),
-    child: Row(children: [
-      const SizedBox(width: 6),
-      const SizedBox(width: 16, height: 16,
-        child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primaryGreen)),
-      const SizedBox(width: 12),
-      const Text('Sending voice note\u2026',
-          style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
-    ]),
-  );
+class _WaveformWidget extends StatelessWidget {
+  final int tick;
+  const _WaveformWidget({required this.tick});
 
-  Widget _buildError() => _shell(
-    borderColor: AppTheme.errorRed.withValues(alpha: 0.5),
-    bg: AppTheme.errorRed.withValues(alpha: 0.05),
-    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Padding(
-        padding: EdgeInsets.only(top: 1),
-        child: Icon(Icons.mic_off_rounded, color: AppTheme.errorRed, size: 18),
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: Text(_errorMsg,
-            style: const TextStyle(
-                color: AppTheme.errorRed, fontSize: 12, height: 1.5)),
-      ),
-      TextButton(
-        onPressed: widget.onCancel,
-        style: TextButton.styleFrom(padding: EdgeInsets.zero),
-        child: const Text('Close',
-            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-      ),
-    ]),
-  );
+  static const _pattern = [
+    0.3, 0.6, 1.0, 0.7, 0.4, 0.9, 0.5, 0.8,
+    0.3, 0.7, 1.0, 0.4, 0.6, 0.9, 0.5, 0.3,
+    0.8, 0.6, 1.0, 0.4, 0.7, 0.5, 0.9, 0.3,
+  ];
 
-  Widget _shell({required Widget child, Color? borderColor, Color? bg}) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        decoration: BoxDecoration(
-          color: bg ?? AppTheme.surfaceBg,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: borderColor ?? AppTheme.borderLight),
-        ),
-        child: child,
-      );
-
-  Widget closeBtn(VoidCallback? onTap) => IconButton(
-        icon: const Icon(Icons.close, color: AppTheme.textSecondary, size: 20),
-        onPressed: onTap,
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(),
-      );
-
-  static const _waveH = [4.0,8.0,12.0,16.0,9.0,5.0,14.0,7.0,16.0,
-                          4.0,11.0,8.0,15.0,6.0,10.0,5.0];
-
-  Widget _buildWaveform() => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 8),
-    child: AnimatedBuilder(
-      animation: _pulseVal,
-      builder: (_, __) => Row(
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         crossAxisAlignment: CrossAxisAlignment.center,
-        children: List.generate(_waveH.length, (i) {
-          final h = _waveH[i] *
-              (0.4 + 0.6 * _pulseVal.value *
-                  (i % 3 == 0 ? 1.0 : i % 3 == 1 ? 0.6 : 0.35));
+        children: List.generate(_pattern.length, (i) {
+          final active = (i + tick) % 3 != 0;
+          final h = (_pattern[i] * 20).clamp(3.0, 20.0);
           return Container(
-            width: 2,
-            height: h.clamp(2.0, 16.0),
+            width: 2.5,
+            height: active ? h : h * 0.4,
             decoration: BoxDecoration(
-              color: AppTheme.errorRed
-                  .withValues(alpha: 0.4 + 0.55 * (i / _waveH.length)),
-              borderRadius: BorderRadius.circular(1),
+              color: active
+                  ? AppTheme.errorRed.withValues(alpha: 0.7)
+                  : AppTheme.errorRed.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(1.5),
             ),
           );
         }),
       ),
-    ),
-  );
+    );
+  }
 }
