@@ -1,4 +1,7 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/clinical_document_model.dart';
@@ -178,6 +181,98 @@ class _TransferSlipDialogState extends State<TransferSlipDialog> {
         date: dateStr,
       );
 
+      if (mounted) setState(() => _isGenerating = false);
+      if (!context.mounted) return;
+
+      await showDialog(
+        context: context,
+        builder: (ctx) => Dialog(
+          insetPadding: const EdgeInsets.all(12),
+          child: SizedBox(
+            width: double.maxFinite,
+            height: MediaQuery.of(ctx).size.height * 0.75,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.transfer_within_a_station_rounded,
+                          color: AppTheme.accentOrange, size: 22),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text('Transfer Slip Preview',
+                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.share_rounded),
+                        tooltip: 'Share PDF',
+                        onPressed: () => Printing.sharePdf(bytes: pdfBytes, filename: 'transfer_slip.pdf'),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.print_rounded),
+                        tooltip: 'Print',
+                        onPressed: () => Printing.layoutPdf(onLayout: (_) => pdfBytes),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: PdfPreview(
+                    build: (_) async => pdfBytes,
+                    allowPrinting: true,
+                    allowSharing: true,
+                    initialPageFormat: PdfPageFormat.a4,
+                    onPrinted: (_) {},
+                    onShared: (_) {},
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        if (!context.mounted) return;
+                        await _saveTransferSlip(pdfBytes, date);
+                      },
+                      icon: const Icon(Icons.save_rounded, size: 18),
+                      label: const Text('Save Transfer Slip'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.accentOrange,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isGenerating = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppTheme.errorRed,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _saveTransferSlip(Uint8List pdfBytes, DateTime date) async {
+    try {
       final fileName = 'transfer_slip_${widget.consultation.id}_${date.millisecondsSinceEpoch}.pdf';
       final url = await _documentService.savePdfToStorage(
         pdfBytes: pdfBytes,
@@ -197,7 +292,7 @@ class _TransferSlipDialogState extends State<TransferSlipDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Transfer slip generated and saved!'),
+            content: Text('Transfer slip saved!'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -207,14 +302,12 @@ class _TransferSlipDialogState extends State<TransferSlipDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
+            content: Text('Error saving: $e'),
             backgroundColor: AppTheme.errorRed,
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
     }
-
-    if (mounted) setState(() => _isGenerating = false);
   }
 }
