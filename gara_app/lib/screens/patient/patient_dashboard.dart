@@ -521,15 +521,21 @@ class _PatientDashboardState extends State<PatientDashboard> {
   }
 
   Widget _historyItem(ConsultationModel c, LanguageProvider lang) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderLight),
+    return InkWell(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => PatientChatScreen(consultation: c)),
       ),
-      child: Row(
-        children: [
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.borderLight),
+        ),
+        child: Row(
+          children: [
           Container(
             width: 40, height: 40,
             decoration: BoxDecoration(
@@ -561,6 +567,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
                 color: c.status == CareStatus.complete ? AppTheme.successGreen : AppTheme.warningYellow)),
           ),
         ],
+      ),
       ),
     );
   }

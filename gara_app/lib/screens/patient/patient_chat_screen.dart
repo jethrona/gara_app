@@ -102,7 +102,9 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
                         },
                       ),
           ),
-          _buildInputBar(lang),
+          widget.consultation.status == CareStatus.complete
+              ? _buildCompletedBanner(lang)
+              : _buildInputBar(lang),
         ],
       ),
     );
@@ -240,6 +242,26 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
       );
     }
     _scrollToBottom();
+  }
+
+  Widget _buildCompletedBanner(LanguageProvider lang) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        color: AppTheme.surfaceBg,
+        border: Border(top: BorderSide(color: AppTheme.borderLight)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.lock_rounded, size: 16, color: AppTheme.textMuted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(lang.t('This consultation is completed. Chat is read-only.', 'Ubu buvuzi burarangiye. Ushobora gusoma gusa.'),
+                style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _sendVoice(Uint8List voiceBytes, int duration) async {
