@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../config/constants.dart';
 import '../../config/theme.dart';
 import '../../models/consultation_model.dart';
 import '../../providers/auth_provider.dart';
@@ -29,6 +27,7 @@ class PatientDashboard extends StatefulWidget {
 class _PatientDashboardState extends State<PatientDashboard> {
   int _currentTab = 0;
   String _doctorName = 'Doctor';
+  String _doctorClinic = '';
   String _doctorPhone = '';
   int _doctorFee = 2000;
 
@@ -42,13 +41,14 @@ class _PatientDashboardState extends State<PatientDashboard> {
     try {
       final res = await SupabaseService().client
           .from('profiles')
-          .select('full_name, phone_number, consultation_fee')
+          .select('full_name, clinic_name, phone_number, consultation_fee')
           .eq('is_doctor', true)
           .limit(1)
           .maybeSingle();
       if (res != null) {
         if (mounted) setState(() {
           _doctorName = res['full_name'] as String? ?? 'Doctor';
+          _doctorClinic = res['clinic_name'] as String? ?? '';
           _doctorPhone = res['phone_number'] as String? ?? '';
           _doctorFee = res['consultation_fee'] as int? ?? 2000;
         });
@@ -63,9 +63,11 @@ class _PatientDashboardState extends State<PatientDashboard> {
     if (auth.userId.isNotEmpty) {
       _fetchDoctorProfile();
       consultationProvider.loadPatientConsultations(auth.userId);
+      consultationProvider.startPatientRealtimeListener(auth.userId);
       notifProvider.init(auth.userId);
       notifProvider.setOnPaymentReceived(() {
         consultationProvider.loadPatientConsultations(auth.userId);
+        _autoNavigateToChat(auth.userId);
       });
     }
   }
@@ -77,10 +79,24 @@ class _PatientDashboardState extends State<PatientDashboard> {
     if (auth.userId.isNotEmpty) {
       _fetchDoctorProfile();
       consultationProvider.loadPatientConsultations(auth.userId);
+      consultationProvider.startPatientRealtimeListener(auth.userId);
       notifProvider.init(auth.userId);
       notifProvider.setOnPaymentReceived(() {
         consultationProvider.loadPatientConsultations(auth.userId);
+        _autoNavigateToChat(auth.userId);
       });
+    }
+  }
+
+  void _autoNavigateToChat(String userId) {
+    if (!mounted) return;
+    final consultations = context.read<ConsultationProvider>().patientConsultations;
+    final active = consultations.where((c) => c.status == CareStatus.inProcess).firstOrNull;
+    if (active != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => PatientChatScreen(consultation: active)),
+      );
     }
   }
 
@@ -280,6 +296,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
             if (active != null) StatusTrackerCard(
               consultation: active,
               doctorName: _doctorName,
+              doctorClinic: _doctorClinic.isNotEmpty ? _doctorClinic : null,
               doctorPhone: _doctorPhone,
               doctorFee: _doctorFee,
             ),
@@ -473,8 +490,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        lang.t('Send $_doctorFee RWF to $_doctorPhone ($_doctorName) via MoMo (*182#)',
-                            'Ohereza $_doctorFee RWF kuri $_doctorPhone ($_doctorName) ukoresheje MoMo (*182#)'),
+                        lang.t('Send $_doctorFee RWF to $_doctorPhone ($_doctorName${_doctorClinic.isNotEmpty ? " - $_doctorClinic" : ""}) via MoMo (*182#)',
+                            'Ohereza $_doctorFee RWF kuri $_doctorPhone ($_doctorName${_doctorClinic.isNotEmpty ? " - $_doctorClinic" : ""}) ukoresheje MoMo (*182#)'),
                         style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
                       ),
                     ),

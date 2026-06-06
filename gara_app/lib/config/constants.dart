@@ -2,8 +2,6 @@ class AppConstants {
   static const String appName = 'Gara';
   static const String supabaseUrl = 'https://fwlfokriptbrpwxmgshu.supabase.co';
   static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ3bGZva3JpcHRicnB3eG1nc2h1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NTM1OTEsImV4cCI6MjA5NjEyOTU5MX0.zYL-CxpxtX1OUmMpL38go1jW1qV9zcRSm7EPifNxeJg';
-  static const String geminiApiKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
-
   static const String doctorRegistrationToken =
       String.fromEnvironment('DOCTOR_REGISTRATION_TOKEN', defaultValue: 'GARA_DOCTOR_2024');
 

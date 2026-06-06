@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
-import '../config/constants.dart';
 import '../config/theme.dart';
 import '../models/consultation_model.dart';
 
 class StatusTrackerCard extends StatelessWidget {
   final ConsultationModel consultation;
   final String doctorName;
+  final String? doctorClinic;
   final String doctorPhone;
   final int doctorFee;
   const StatusTrackerCard({
     super.key,
     required this.consultation,
     this.doctorName = 'Doctor',
+    this.doctorClinic,
     this.doctorPhone = '',
     this.doctorFee = 2000,
   });
@@ -67,6 +68,9 @@ class StatusTrackerCard extends StatelessWidget {
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: _getStatusColor())),
                   Text(consultation.severityLevel.split('–')[0].trim(),
                       style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                  if (doctorClinic != null && doctorClinic!.isNotEmpty)
+                    Text(doctorClinic!,
+                        style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                 ],
               ),
             ],

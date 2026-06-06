@@ -7,6 +7,7 @@ import '../../config/theme.dart';
 import '../../models/clinical_document_model.dart';
 import '../../models/consultation_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/consultation_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../services/document_service.dart';
 
@@ -22,6 +23,12 @@ class _TransferSlipDialogState extends State<TransferSlipDialog> {
   final DocumentService _documentService = DocumentService();
   final _notesController = TextEditingController();
   bool _isGenerating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _notesController.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
@@ -97,7 +104,10 @@ class _TransferSlipDialogState extends State<TransferSlipDialog> {
               _infoRow(lang.t('Phone', 'Telefone'), widget.consultation.patientPhone ?? ''),
               _infoRow(lang.t('Sex', 'Igitsina'), widget.consultation.biologicalSex),
               _infoRow(lang.t('Severity', 'Uburemere'), widget.consultation.severityLevel.split('–')[0].trim()),
-              if (widget.consultation.aiBriefSummary != null) ...[
+              if (widget.consultation.aiBriefSummary != null &&
+                  !widget.consultation.aiBriefSummary!.contains('Unavailable') &&
+                  !widget.consultation.aiBriefSummary!.contains('unavailable') &&
+                  !widget.consultation.aiBriefSummary!.contains('failed')) ...[
                 const SizedBox(height: 12),
                 Text(lang.t('AI Assessment', 'Isuzuma rya AI'),
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
@@ -173,6 +183,7 @@ class _TransferSlipDialogState extends State<TransferSlipDialog> {
 
       final pdfBytes = await _documentService.generateTransferSlipPdf(
         doctorName: auth.profile?.fullName ?? 'Doctor',
+        clinicName: auth.profile?.clinicName,
         patientName: widget.consultation.patientName ?? 'Patient',
         patientPhone: widget.consultation.patientPhone ?? '',
         aiBrief: widget.consultation.aiBriefSummary ?? 'No AI brief available.',
@@ -288,6 +299,13 @@ class _TransferSlipDialogState extends State<TransferSlipDialog> {
       );
 
       await _documentService.savePdfLocally(pdfBytes, fileName);
+
+      if (context.mounted) {
+        await context.read<ConsultationProvider>().updateConsultationStatus(
+          widget.consultation.id!,
+          CareStatus.complete,
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

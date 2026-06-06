@@ -254,12 +254,14 @@ class AuthService {
   Future<void> updateProfile({
     required String id,
     String? fullName,
+    String? clinicName,
     String? avatarUrl,
     String? phoneNumber,
     int? consultationFee,
   }) async {
     final updates = <String, dynamic>{};
     if (fullName != null) updates['full_name'] = fullName;
+    if (clinicName != null) updates['clinic_name'] = clinicName;
     if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
     if (phoneNumber != null) updates['phone_number'] = phoneNumber;
     if (consultationFee != null) updates['consultation_fee'] = consultationFee;

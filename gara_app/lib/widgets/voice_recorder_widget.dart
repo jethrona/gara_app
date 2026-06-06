@@ -50,7 +50,7 @@ import '../config/theme.dart';
 //   • onSend is still void — parent dismisses after calling it
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum _RS { starting, recording, preview, sending, error }
+enum _RS { idle, starting, recording, preview, sending, error }
 
 class VoiceRecorderWidget extends StatefulWidget {
   final void Function(Uint8List voiceBytes, int durationSeconds) onSend;
@@ -107,8 +107,13 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget>
       if (mounted) setState(() { _playing = false; _prog = 0; _posSec = 0; });
     });
 
-    // Start immediately — don't check hasPermission() first
-    _startRecording();
+    // Don't auto-start — browser needs user gesture for getUserMedia
+    // Use idle state and require a tap to start recording on web
+    if (kIsWeb) {
+      _state = _RS.idle;
+    } else {
+      _startRecording();
+    }
   }
 
   @override
@@ -126,22 +131,25 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget>
 
   Future<void> _startRecording() async {
     try {
-      final dir = await getTemporaryDirectory();
-      final path =
-          '${dir.path}/gara_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      String? path;
 
-      // KEY FIX: call start() directly — it handles permission internally.
-      // Do NOT call hasPermission() first; that's the broken call.
-      await _rec.start(
-        kIsWeb
-            ? const RecordConfig()
-            : const RecordConfig(
-                encoder: AudioEncoder.aacLc,
-                bitRate: 64000,
-                sampleRate: 44100,
-              ),
-        path: path,
-      );
+      if (kIsWeb) {
+        // Web: pass path before start to preserve user gesture context
+        path = 'gara_${DateTime.now().millisecondsSinceEpoch}.webm';
+        await _rec.start(const RecordConfig(), path: path);
+      } else {
+        final dir = await getTemporaryDirectory();
+        path = '${dir.path}/gara_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+        await _rec.start(
+          const RecordConfig(
+            encoder: AudioEncoder.aacLc,
+            bitRate: 64000,
+            sampleRate: 44100,
+          ),
+          path: path,
+        );
+      }
 
       // Verify it actually started (catches silent failures)
       final isRecording = await _rec.isRecording();
@@ -297,6 +305,7 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget>
 
   Widget _buildForState() {
     switch (_state) {
+      case _RS.idle:      return _buildIdle();
       case _RS.starting:  return _buildStarting();
       case _RS.recording: return _buildRecording();
       case _RS.preview:   return _buildPreview();
@@ -304,6 +313,27 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget>
       case _RS.error:     return _buildError();
     }
   }
+
+  // ── idle — user must tap to start (preserves web gesture context) ────────
+  Widget _buildIdle() => _shell(
+    border: AppTheme.borderLight,
+    child: GestureDetector(
+      onTap: _startRecording,
+      child: Row(children: [
+        const SizedBox(width: 4),
+        Container(
+          width: 32, height: 32,
+          decoration: const BoxDecoration(
+              color: AppTheme.primaryGreen, shape: BoxShape.circle),
+          child: const Icon(Icons.mic_rounded, color: Colors.white, size: 18),
+        ),
+        const SizedBox(width: 10),
+        const Expanded(child: Text('Tap to start recording',
+            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary))),
+        _xBtn(_cancel),
+      ]),
+    ),
+  );
 
   // ── starting (spinner) ────────────────────────────────────────────────────
   Widget _buildStarting() => _shell(

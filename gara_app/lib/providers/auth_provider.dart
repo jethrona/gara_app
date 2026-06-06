@@ -343,12 +343,14 @@ class AuthProvider extends ChangeNotifier {
     required int consultationFee,
     required String fullName,
     required String phoneNumber,
+    String? clinicName,
   }) async {
     if (_userId.isEmpty) return;
     try {
       await _authService.updateProfile(
         id: _userId,
         fullName: fullName,
+        clinicName: clinicName,
         phoneNumber: phoneNumber,
         consultationFee: consultationFee,
       );

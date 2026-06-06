@@ -220,8 +220,11 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
                   const SizedBox(height: 12),
                   Text(auth.profile?.fullName ?? '',
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
+                  if (auth.profile?.clinicName != null && auth.profile!.clinicName!.isNotEmpty)
+                    Text(auth.profile!.clinicName!,
+                        style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.8))),
                   Text(auth.profile?.phoneNumber ?? '',
-                      style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.8))),
+                      style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.6))),
                 ],
               ),
             ),
@@ -357,6 +360,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
     final auth = context.read<AuthProvider>();
     final feeController = TextEditingController(text: auth.profile != null ? '${auth.profile!.consultationFee}' : '2000');
     final nameController = TextEditingController(text: auth.profile?.fullName ?? '');
+    final clinicController = TextEditingController(text: auth.profile?.clinicName ?? '');
     final phoneController = TextEditingController(text: auth.profile?.phoneNumber ?? '');
 
     showDialog(
@@ -385,10 +389,20 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
               ),
               const SizedBox(height: 12),
               TextField(
+                controller: clinicController,
+                decoration: const InputDecoration(
+                  labelText: 'Clinic Name',
+                  hintText: 'e.g. GARA Health Center',
+                  prefixIcon: Icon(Icons.local_hospital_rounded),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(
-                  labelText: 'Phone Number',
+                  labelText: 'MoMo Phone Number',
+                  hintText: 'e.g. 0788123456',
                   prefixIcon: Icon(Icons.phone_rounded),
                 ),
               ),
@@ -403,9 +417,11 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
           TextButton(
             onPressed: () async {
               final fee = int.tryParse(feeController.text.trim()) ?? 2000;
+              final clinicText = clinicController.text.trim();
               await auth.updateDoctorSettings(
                 consultationFee: fee,
                 fullName: nameController.text.trim(),
+                clinicName: clinicText.isNotEmpty ? clinicText : null,
                 phoneNumber: phoneController.text.trim(),
               );
               if (ctx.mounted) Navigator.pop(ctx);
@@ -564,7 +580,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
           consultation: consultation,
           onTap: () {
             if (status == CareStatus.pendingPayment) {
-              _showPaymentVerification(consultation);
+              _showPendingPaymentOptions(consultation);
             } else if (status == CareStatus.inProcess) {
               Navigator.push(
                 context,
@@ -583,8 +599,10 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
 
   void _showPaymentVerification(ConsultationModel consultation) {
     final lang = context.read<LanguageProvider>();
+    final auth = context.read<AuthProvider>();
     final transactionController = TextEditingController();
-    final amountController = TextEditingController(text: AppConstants.consultationFee.toString());
+    final profileFee = auth.profile?.consultationFee ?? AppConstants.consultationFee;
+    final amountController = TextEditingController(text: profileFee.toString());
 
     showModalBottomSheet(
       context: context,
@@ -650,6 +668,77 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showPendingPaymentOptions(ConsultationModel consultation) {
+    final lang = context.read<LanguageProvider>();
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.borderLight,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(lang.t('Pending Payment', 'Amafaranga Ategejeje'),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Text('${consultation.patientName ?? "Unknown"}',
+                  style: const TextStyle(color: AppTheme.textSecondary)),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _showPaymentVerification(consultation);
+                  },
+                  icon: const Icon(Icons.payments_rounded),
+                  label: Text(lang.t('Verify Payment', 'Emeza Amafaranga')),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryGreen,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DoctorChatWorkspace(consultation: consultation),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.chat_rounded),
+                  label: Text(lang.t('View Messages', 'Reba Ubutumwa')),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.primaryGreen,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

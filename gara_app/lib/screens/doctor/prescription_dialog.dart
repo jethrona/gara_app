@@ -4,6 +4,7 @@ import '../../config/theme.dart';
 import '../../models/clinical_document_model.dart';
 import '../../models/consultation_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/consultation_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../services/document_service.dart';
 
@@ -218,6 +219,7 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
 
       final pdfBytes = await _documentService.generatePrescriptionPdf(
         doctorName: auth.profile?.fullName ?? 'Doctor',
+        clinicName: auth.profile?.clinicName,
         patientName: widget.consultation.patientName ?? 'Patient',
         patientPhone: widget.consultation.patientPhone ?? '',
         diagnosis: _diagnosisController.text.trim(),
@@ -244,8 +246,14 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
         pdfStorageUrl: url,
       );
 
-      final localFile = await _documentService.savePdfLocally(pdfBytes, fileName);
-      debugPrint("[Prescription] saved to: ${localFile.path}");
+      await _documentService.savePdfLocally(pdfBytes, fileName);
+
+      if (context.mounted) {
+        await context.read<ConsultationProvider>().updateConsultationStatus(
+          widget.consultation.id!,
+          CareStatus.complete,
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

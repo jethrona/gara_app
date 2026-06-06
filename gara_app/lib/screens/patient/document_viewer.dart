@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:open_filex/open_filex.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/clinical_document_model.dart';
@@ -19,12 +18,8 @@ class _DocumentViewerState extends State<DocumentViewer> {
   final DocumentService _service = DocumentService();
 
   bool _isDownloading = false;
-  bool _isSharing = false;
-  bool _isOpening = false;
   File? _localFile;
   String? _errorMsg;
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
 
   String get _fileName {
     final uri = Uri.parse(widget.document.pdfStorageUrl);
@@ -34,7 +29,6 @@ class _DocumentViewerState extends State<DocumentViewer> {
     return '${widget.document.documentKind.name}_${widget.document.id}.pdf';
   }
 
-  // Download the file if not already local, then return it
   Future<File?> _ensureLocal() async {
     if (_localFile != null && _localFile!.existsSync()) return _localFile;
 
@@ -66,8 +60,6 @@ class _DocumentViewerState extends State<DocumentViewer> {
     }
   }
 
-  // ── Actions ───────────────────────────────────────────────────────────────
-
   Future<void> _download() async {
     setState(() { _isDownloading = true; _errorMsg = null; });
     final file = await _ensureLocal();
@@ -75,45 +67,12 @@ class _DocumentViewerState extends State<DocumentViewer> {
 
     if (file != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Saved to: ${file.path}'),
+        content: const Text('Saved to device'),
         backgroundColor: AppTheme.primaryGreen,
         behavior: SnackBarBehavior.floating,
       ));
     }
   }
-
-  Future<void> _preview() async {
-    setState(() { _isOpening = true; _errorMsg = null; });
-    final file = await _ensureLocal();
-    if (file == null) { setState(() => _isOpening = false); return; }
-
-    try {
-      final result = await OpenFilex.open(file.path);
-      if (result.type != ResultType.done && mounted) {
-        _showError('Could not open PDF: ${result.message}\n'
-            'Make sure a PDF viewer app is installed on this device.');
-      }
-    } catch (e) {
-      _showError('Preview failed: $e');
-    }
-    if (mounted) setState(() => _isOpening = false);
-  }
-
-  Future<void> _share() async {
-    setState(() { _isSharing = true; _errorMsg = null; });
-    final file = await _ensureLocal();
-    if (file == null) { setState(() => _isSharing = false); return; }
-
-    try {
-      await _service.sharePdf(file,
-          subject: 'GARA - ${widget.document.displayName}');
-    } catch (e) {
-      _showError('Share failed: $e');
-    }
-    if (mounted) setState(() => _isSharing = false);
-  }
-
-  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -162,7 +121,7 @@ class _DocumentViewerState extends State<DocumentViewer> {
             // Date
             if (widget.document.createdAt != null)
               Text(
-                'Generated on '
+                '${lang.t("Generated on", "Yakozwe")} '
                 '${widget.document.createdAt!.day}/'
                 '${widget.document.createdAt!.month}/'
                 '${widget.document.createdAt!.year}',
@@ -171,37 +130,27 @@ class _DocumentViewerState extends State<DocumentViewer> {
               ),
             const SizedBox(height: 32),
 
-            // ── Action buttons ─────────────────────────────────────────────
-
-            // Download
-            _ActionButton(
-              icon: Icons.download_rounded,
-              label: lang.t('Download to Device', 'Pakurura'),
-              color: AppTheme.primaryGreen,
-              isLoading: _isDownloading,
-              onTap: _isDownloading ? null : _download,
-            ),
-            const SizedBox(height: 12),
-
-            // Preview
-            _ActionButton(
-              icon: Icons.visibility_rounded,
-              label: lang.t('Preview Document', 'Reba Inyandiko'),
-              color: AppTheme.accentBlue,
-              isLoading: _isOpening,
-              onTap: _isOpening ? null : _preview,
-              outlined: true,
-            ),
-            const SizedBox(height: 12),
-
-            // Share
-            _ActionButton(
-              icon: Icons.share_rounded,
-              label: lang.t('Share', 'Sangira'),
-              color: AppTheme.accentOrange,
-              isLoading: _isSharing,
-              onTap: _isSharing ? null : _share,
-              outlined: true,
+            // Download button only
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton.icon(
+                onPressed: _isDownloading ? null : _download,
+                icon: _isDownloading
+                    ? const SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.download_rounded, size: 20),
+                label: Text(lang.t('Download to Device', 'Pakurura'),
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryGreen,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
             ),
 
             // Error message
@@ -236,7 +185,7 @@ class _DocumentViewerState extends State<DocumentViewer> {
 
             const SizedBox(height: 32),
 
-            // Info note
+            // Storage info note
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -267,69 +216,6 @@ class _DocumentViewerState extends State<DocumentViewer> {
           ],
         ),
       ),
-    );
-  }
-}
-
-// ── Reusable action button ────────────────────────────────────────────────────
-
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final bool isLoading;
-  final VoidCallback? onTap;
-  final bool outlined;
-
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.isLoading,
-    required this.onTap,
-    this.outlined = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: outlined
-          ? OutlinedButton.icon(
-              onPressed: onTap,
-              icon: isLoading
-                  ? SizedBox(
-                      width: 18, height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: color))
-                  : Icon(icon, color: color, size: 20),
-              label: Text(label,
-                  style: TextStyle(
-                      color: color, fontWeight: FontWeight.w600)),
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: color.withValues(alpha: 0.5)),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-              ),
-            )
-          : ElevatedButton.icon(
-              onPressed: onTap,
-              icon: isLoading
-                  ? const SizedBox(
-                      width: 18, height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : Icon(icon, size: 20),
-              label: Text(label,
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: color,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-              ),
-            ),
     );
   }
 }

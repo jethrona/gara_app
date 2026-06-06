@@ -163,6 +163,16 @@ class ConsultationProvider extends ChangeNotifier {
     );
   }
 
+  void startPatientRealtimeListener(String patientId) {
+    _realtimeChannel = _consultationService.subscribeToConsultations(
+      onUpsert: (data) {
+        if (data['patient_id'] == patientId) {
+          loadPatientConsultations(patientId);
+        }
+      },
+    );
+  }
+
   void disposeRealtime() {
     _realtimeChannel?.unsubscribe();
   }

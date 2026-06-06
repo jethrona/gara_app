@@ -85,7 +85,7 @@ class ConsultationService {
           'momo_transaction_id': transactionId,
           'payment_amount': amount,
           'status': 'in_process',
-          'paid_at': DateTime.now().toIso8601String(),
+          'paid_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('id', consultationId);
   }
@@ -117,7 +117,7 @@ class ConsultationService {
           .select('status, payment_amount, paid_at');
 
       final list = response as List;
-      final now = DateTime.now();
+      final now = DateTime.now().toUtc();
 
       double incomeForDate(DateTime date) {
         return list

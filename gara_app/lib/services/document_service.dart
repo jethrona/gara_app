@@ -74,6 +74,7 @@ class DocumentService {
 
   Future<Uint8List> generatePrescriptionPdf({
     required String doctorName,
+    String? clinicName,
     required String patientName,
     required String patientPhone,
     required String diagnosis,
@@ -108,6 +109,10 @@ class DocumentService {
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.end,
                 children: [
+                  if (clinicName != null && clinicName.isNotEmpty)
+                    pw.Text(clinicName,
+                        style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold, fontSize: 13)),
                   pw.Text('Dr. $doctorName',
                       style: pw.TextStyle(
                           fontWeight: pw.FontWeight.bold, fontSize: 13)),
@@ -252,6 +257,7 @@ class DocumentService {
 
   Future<Uint8List> generateTransferSlipPdf({
     required String doctorName,
+    String? clinicName,
     required String patientName,
     required String patientPhone,
     required String aiBrief,
@@ -282,8 +288,16 @@ class DocumentService {
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text('Referring Doctor: $doctorName',
-                  style: pw.TextStyle(fontSize: 12)),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  if (clinicName != null && clinicName.isNotEmpty)
+                    pw.Text(clinicName,
+                        style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Referring Doctor: $doctorName',
+                      style: pw.TextStyle(fontSize: 12)),
+                ],
+              ),
               pw.Text('Date: $date', style: pw.TextStyle(fontSize: 12)),
             ],
           ),

@@ -2,6 +2,7 @@ class ProfileModel {
   final String id;
   final String phoneNumber;
   final String fullName;
+  final String? clinicName;
   final bool isDoctor;
   final DateTime? createdAt;
   final String? avatarUrl;
@@ -11,6 +12,7 @@ class ProfileModel {
     required this.id,
     required this.phoneNumber,
     required this.fullName,
+    this.clinicName,
     this.isDoctor = false,
     this.createdAt,
     this.avatarUrl,
@@ -22,6 +24,7 @@ class ProfileModel {
       id: map['id'] as String,
       phoneNumber: map['phone_number'] as String,
       fullName: map['full_name'] as String,
+      clinicName: map['clinic_name'] as String?,
       isDoctor: map['is_doctor'] as bool? ?? false,
       createdAt: map['created_at'] != null ? DateTime.parse(map['created_at'] as String) : null,
       avatarUrl: map['avatar_url'] as String?,
@@ -34,6 +37,7 @@ class ProfileModel {
       'id': id,
       'phone_number': phoneNumber,
       'full_name': fullName,
+      if (clinicName != null) 'clinic_name': clinicName,
       'is_doctor': isDoctor,
       if (avatarUrl != null) 'avatar_url': avatarUrl,
       if (isDoctor) 'consultation_fee': consultationFee,
@@ -44,6 +48,7 @@ class ProfileModel {
     String? id,
     String? phoneNumber,
     String? fullName,
+    String? clinicName,
     bool? isDoctor,
     DateTime? createdAt,
     String? avatarUrl,
@@ -53,6 +58,7 @@ class ProfileModel {
       id: id ?? this.id,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       fullName: fullName ?? this.fullName,
+      clinicName: clinicName ?? this.clinicName,
       isDoctor: isDoctor ?? this.isDoctor,
       createdAt: createdAt ?? this.createdAt,
       avatarUrl: avatarUrl ?? this.avatarUrl,
