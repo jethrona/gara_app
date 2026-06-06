@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/clinical_document_model.dart';
 import 'supabase_service.dart';
@@ -232,7 +232,6 @@ class DocumentService {
     await _supabase.client.storage.from('clinical_documents').uploadBinary(
       path,
       pdfBytes,
-      fileOptions: const FileOptions(contentType: 'application/pdf'),
     );
     final url = _supabase.client.storage.from('clinical_documents').getPublicUrl(path);
     return url;
@@ -270,7 +269,8 @@ class DocumentService {
     return (response as List).map((e) => ClinicalDocumentModel.fromMap(e)).toList();
   }
 
-  Future<File> savePdfLocally(Uint8List bytes, String fileName) async {
+  Future<File?> savePdfLocally(Uint8List bytes, String fileName) async {
+    if (kIsWeb) return null;
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/$fileName');
     await file.writeAsBytes(bytes);

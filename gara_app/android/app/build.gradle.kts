@@ -32,6 +32,17 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    packaging {
+        resources {
+            pickFirsts += setOf(
+                "lib/x86/libavcodec.so",
+                "lib/x86_64/libavcodec.so",
+                "lib/armeabi-v7a/libavcodec.so",
+                "lib/arm64-v8a/libavcodec.so",
+            )
+        }
+    }
 }
 
 kotlin {

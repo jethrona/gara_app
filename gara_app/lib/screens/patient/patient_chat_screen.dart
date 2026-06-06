@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
-import '../../services/supabase_service.dart';
 import '../../models/consultation_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
@@ -22,29 +21,13 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   final _picker = ImagePicker();
-  String? _doctorAvatarUrl;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ChatProvider>().loadMessages(widget.consultation.id!);
-      _fetchDoctorAvatar();
     });
-  }
-
-  Future<void> _fetchDoctorAvatar() async {
-    try {
-      final res = await SupabaseService().client
-          .from('profiles')
-          .select('avatar_url')
-          .eq('is_doctor', true)
-          .limit(1)
-          .maybeSingle();
-      if (res != null && res['avatar_url'] != null) {
-        if (mounted) setState(() => _doctorAvatarUrl = res['avatar_url'] as String);
-      }
-    } catch (_) {}
   }
 
   @override
@@ -79,7 +62,10 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
           children: [
             Text(lang.t('Consultation', 'Ubuvuzi')),
             Text('#${widget.consultation.id}',
-                style: const TextStyle(fontSize: 12, color: AppTheme.textMuted, fontWeight: FontWeight.w400)),
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textMuted,
+                    fontWeight: FontWeight.w400)),
           ],
         ),
         actions: [
@@ -91,7 +77,10 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(lang.t('Active', 'Igikora'),
-                style: const TextStyle(fontSize: 12, color: AppTheme.statusInProcess, fontWeight: FontWeight.w600)),
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.statusInProcess,
+                    fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -108,14 +97,9 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
                         itemCount: chatProvider.messages.length,
                         itemBuilder: (context, index) {
                           final msg = chatProvider.messages[index];
-                          final isMe = msg.senderId == context.read<AuthProvider>().userId;
-                          final auth = context.read<AuthProvider>();
-                          return ChatBubble(
-                            message: msg,
-                            isMe: isMe,
-                            myAvatarUrl: auth.profile?.avatarUrl,
-                            theirAvatarUrl: _doctorAvatarUrl,
-                          );
+                          final isMe = msg.senderId ==
+                              context.read<AuthProvider>().userId;
+                          return ChatBubble(message: msg, isMe: isMe);
                         },
                       ),
           ),
@@ -136,14 +120,17 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
               color: AppTheme.primaryGreen.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Icon(Icons.chat_rounded, size: 40, color: AppTheme.primaryGreen),
+            child: const Icon(Icons.chat_rounded,
+                size: 40, color: AppTheme.primaryGreen),
           ),
           const SizedBox(height: 16),
           Text(lang.t('Start your conversation', 'Tangira ikiganiro'),
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          Text(lang.t('Send a message to your doctor', 'Ohereza ubutumwa kuri muganga wawe'),
-              style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary)),
+          Text(lang.t('Send a message to your doctor',
+              'Ohereza ubutumwa kuri muganga wawe'),
+              style: const TextStyle(
+                  fontSize: 14, color: AppTheme.textSecondary)),
         ],
       ),
     );
@@ -151,71 +138,66 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
 
   Widget _buildInputBar(LanguageProvider lang) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: AppTheme.borderLight)),
       ),
       child: SafeArea(
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Container(
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceBg,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.image_rounded, color: AppTheme.textSecondary),
-                    onPressed: () => _pickImage(),
-                  ),
-                  VoiceMicButton(
-                    onSend: (bytes, duration) async {
-                      final chatProvider = context.read<ChatProvider>();
-                      final auth = context.read<AuthProvider>();
-                      final err = await chatProvider.uploadAndSendVoice(
-                        consultationId: widget.consultation.id!,
-                        senderId: auth.userId,
-                        voiceBytes: bytes,
-                        durationSeconds: duration,
-                      );
-                      if (err != null && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Voice note failed: $err')),
-                        );
-                      }
-                      _scrollToBottom();
-                    },
-                  ),
-                ],
-              ),
+            IconButton(
+              icon: const Icon(Icons.image_rounded, color: AppTheme.textSecondary),
+              onPressed: _pickImage,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 2),
+            VoiceMicButton(
+              onSend: (bytes, duration) async {
+                final err = await context.read<ChatProvider>().uploadAndSendVoice(
+                  consultationId: widget.consultation.id!,
+                  senderId: context.read<AuthProvider>().userId,
+                  voiceBytes: bytes,
+                  durationSeconds: duration,
+                );
+                if (err != null && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Voice note failed: $err')));
+                } else {
+                  _scrollToBottom();
+                }
+              },
+            ),
+            const SizedBox(width: 6),
             Expanded(
               child: TextField(
                 controller: _messageController,
                 textCapitalization: TextCapitalization.sentences,
+                maxLines: 4,
+                minLines: 1,
                 decoration: InputDecoration(
                   hintText: lang.t('Type a message...', 'Andika ubutumwa...'),
                   border: InputBorder.none,
                   filled: true,
                   fillColor: AppTheme.surfaceBg,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  isDense: true,
                 ),
                 onSubmitted: (_) => _sendMessage(),
               ),
             ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: const BoxDecoration(
-                color: AppTheme.primaryGreen,
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                onPressed: _sendMessage,
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: _sendMessage,
+              child: Container(
+                width: 40, height: 40,
+                decoration: const BoxDecoration(
+                    color: AppTheme.primaryGreen, shape: BoxShape.circle),
+                child: const Icon(Icons.send_rounded,
+                    color: Colors.white, size: 18),
               ),
             ),
           ],
@@ -227,12 +209,9 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
   void _sendMessage() {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
-
-    final chatProvider = context.read<ChatProvider>();
-    final auth = context.read<AuthProvider>();
-    chatProvider.sendTextMessage(
+    context.read<ChatProvider>().sendTextMessage(
       consultationId: widget.consultation.id!,
-      senderId: auth.userId,
+      senderId: context.read<AuthProvider>().userId,
       content: text,
     );
     _messageController.clear();
@@ -240,23 +219,19 @@ class _PatientChatScreenState extends State<PatientChatScreen> {
   }
 
   Future<void> _pickImage() async {
-    final xfile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 25);
+    final xfile = await _picker.pickImage(
+        source: ImageSource.gallery, imageQuality: 25);
     if (xfile == null) return;
     final bytes = await xfile.readAsBytes();
-
-    final chatProvider = context.read<ChatProvider>();
-    final auth = context.read<AuthProvider>();
-    final err = await chatProvider.uploadAndSendImage(
+    final err = await context.read<ChatProvider>().uploadAndSendImage(
       consultationId: widget.consultation.id!,
-      senderId: auth.userId,
+      senderId: context.read<AuthProvider>().userId,
       imageBytes: bytes,
     );
-    if (err != null && context.mounted) {
+    if (err != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Image failed: $err')),
-      );
+        SnackBar(content: Text('Image failed: $err')));
     }
     _scrollToBottom();
   }
-
 }

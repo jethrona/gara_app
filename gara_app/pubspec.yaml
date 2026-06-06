@@ -29,7 +29,7 @@ dependencies:
   google_fonts: ^6.2.1
   shimmer: ^3.0.0
   connectivity_plus: ^6.1.1
-  record: ^7.0.0
+  flutter_sound: ^9.15.13
   audioplayers: ^6.1.0
   http: ^1.2.2
 

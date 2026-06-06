@@ -1,6 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
 import '../../config/theme.dart';
 import '../../models/clinical_document_model.dart';
 
@@ -80,23 +83,39 @@ class _DocumentViewerState extends State<DocumentViewer> {
   Future<void> _downloadPdf() async {
     setState(() => _isDownloading = true);
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final fileName = '${widget.document.displayName.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}.pdf';
-      final file = File('${dir.path}/$fileName');
-
-      // Download from URL
       final url = Uri.parse(widget.document.pdfStorageUrl);
       final response = await HttpClient().getUrl(url);
       final result = await response.close();
-      await file.writeAsBytes(await result.fold(<int>[], (prev, chunk) => prev + chunk));
+      final bytes = await result.fold(<int>[], (prev, chunk) => prev + chunk);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Downloaded to: ${file.path}'),
-            behavior: SnackBarBehavior.floating,
-          ),
+      if (kIsWeb) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Opening PDF in browser\u2026'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        // Trigger browser download via printing share
+        await Printing.sharePdf(
+          bytes: Uint8List.fromList(bytes),
+          filename: widget.document.displayName.replaceAll(' ', '_'),
         );
+      } else {
+        final dir = await getApplicationDocumentsDirectory();
+        final fileName = '${widget.document.displayName.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+        final file = File('${dir.path}/$fileName');
+        await file.writeAsBytes(bytes);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Downloaded to: ${file.path}'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
