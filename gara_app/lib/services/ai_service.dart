@@ -22,11 +22,15 @@ class AIService {
         },
       );
 
-      final data = response.data as Map<String, dynamic>?;
-      return data?['brief'] as String? ??
-          'AI brief generation failed. Please review patient input manually.';
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        if (data['brief'] != null) return data['brief'] as String;
+        final err = data['details'] ?? data['error'] ?? 'unknown error';
+        return 'AI brief generation failed ($err).';
+      }
+      return 'AI brief generation failed.';
     } catch (e) {
-      return 'Unable to generate AI brief at this time.';
+      return 'Unable to generate AI brief at this time';
     }
   }
 }
