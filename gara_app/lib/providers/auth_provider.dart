@@ -295,7 +295,6 @@ class AuthProvider extends ChangeNotifier {
     if (storedPin == null) return 'No PIN set on this device. Use the device where you registered.';
     if (pin != storedPin) return 'Wrong PIN';
 
-    // Verify the phone number has an account without checking password
     final exists = await _authService.phoneExists(phone);
     if (!exists) {
       return 'No account found with this phone number';
@@ -303,20 +302,22 @@ class AuthProvider extends ChangeNotifier {
     return null;
   }
 
-  Future<String?> resetPasswordWithPin(String newPassword) async {
+  Future<String?> resetPassword({
+    required String phone,
+    required String oldPassword,
+    required String newPassword,
+  }) async {
     if (newPassword.length < 6) {
       return 'Password must be at least 6 characters';
     }
     try {
-      if (_userId.isEmpty) return 'You are not logged in.';
-
-      await _authService.updatePassword(_userId, newPassword);
-
+      final profile = await _authService.login(phone, oldPassword);
+      if (profile == null) {
+        return 'Wrong current password';
+      }
+      await _authService.updatePassword(profile.id, newPassword);
       if (_rememberMe) {
-        final creds = await _authService.getRememberedCredentials();
-        if (creds != null) {
-          await _authService.saveRememberedCredentials(creds['phone']!, newPassword);
-        }
+        await _authService.saveRememberedCredentials(phone, newPassword);
       }
       return null;
     } catch (e) {

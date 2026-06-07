@@ -347,11 +347,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
   void _showForgotPassword(LanguageProvider lang) {
     final phoneController = TextEditingController();
-    final pinController = TextEditingController();
+    final oldPasswordController = TextEditingController();
     final newPasswordController = TextEditingController();
+    bool showOldPassword = false;
     bool showNewPassword = false;
-    bool showPin = false;
-    bool showResetForm = false;
     bool processing = false;
     String? statusMsg;
 
@@ -366,49 +365,42 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (!showResetForm) ...[
-                  Text(lang.t('Enter your phone number to reset your password.', 'Shyiramo numero yawe kugirango uhindure ijambo ry\'ibanga.')),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: phoneController,
-                    keyboardType: TextInputType.phone,
-                    decoration: InputDecoration(
-                      labelText: lang.t('Phone Number', 'Nomero ya Telefone'),
-                      prefixIcon: const Icon(Icons.phone_android),
+                Text(lang.t('Enter your phone number and current password, then choose a new password.', 'Shyiramo numero yawe n\'ijambo ry\'ibanga rya none, hanyuma hitamo rishya.')),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: lang.t('Phone Number', 'Nomero ya Telefone'),
+                    prefixIcon: const Icon(Icons.phone_android),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: oldPasswordController,
+                  obscureText: !showOldPassword,
+                  decoration: InputDecoration(
+                    labelText: lang.t('Current Password', 'Ijambo ry\'ibanga rya none'),
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(showOldPassword ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setDialogState(() => showOldPassword = !showOldPassword),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: pinController,
-                    obscureText: !showPin,
-                    keyboardType: TextInputType.number,
-                    maxLength: 4,
-                    decoration: InputDecoration(
-                      labelText: lang.t('Device PIN', 'PIN yawe'),
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      counterText: '',
-                      suffixIcon: IconButton(
-                        icon: Icon(showPin ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setDialogState(() => showPin = !showPin),
-                      ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: newPasswordController,
+                  obscureText: !showNewPassword,
+                  decoration: InputDecoration(
+                    labelText: lang.t('New Password', 'Ijambo ry\'ibanga rishya'),
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(showNewPassword ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setDialogState(() => showNewPassword = !showNewPassword),
                     ),
                   ),
-                ] else ...[
-                  Text(lang.t('Choose a new password.', 'Hitamo ijambo ry\'ibanga rishya.')),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: newPasswordController,
-                    obscureText: !showNewPassword,
-                    decoration: InputDecoration(
-                      labelText: lang.t('New Password', 'Ijambo ry\'ibanga rishya'),
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      suffixIcon: IconButton(
-                        icon: Icon(showNewPassword ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setDialogState(() => showNewPassword = !showNewPassword),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
                 if (statusMsg != null) ...[
                   const SizedBox(height: 12),
                   Text(statusMsg!, style: TextStyle(color: statusMsg!.contains('✅') ? AppTheme.successGreen : AppTheme.errorRed, fontSize: 13)),
@@ -424,45 +416,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
             ),
             TextButton(
               onPressed: processing ? null : () async {
-                if (!showResetForm) {
-                  final phone = phoneController.text.trim();
-                  final pin = pinController.text.trim();
-                  if (phone.isEmpty || pin.length < 4) return;
-                  setDialogState(() => processing = true);
-                  final auth = context.read<AuthProvider>();
-                  final result = await auth.verifyAndResetPassword(phone, pin);
-                  setDialogState(() {
-                    processing = false;
-                    if (result == null) {
-                      showResetForm = true;
-                      statusMsg = null;
-                    } else {
-                      statusMsg = result;
-                    }
-                  });
-                } else {
-                  final newPassword = newPasswordController.text.trim();
-                  if (newPassword.length < 6) {
-                    setDialogState(() => statusMsg = 'Password must be at least 6 characters');
-                    return;
-                  }
-                  setDialogState(() => processing = true);
-                  final auth = context.read<AuthProvider>();
-                  final error = await auth.resetPasswordWithPin(newPassword);
-                  setDialogState(() {
-                    processing = false;
-                    if (error == null) {
-                      statusMsg = '✅ Password updated successfully';
-                      Future.delayed(const Duration(seconds: 1), () {
-                        if (ctx.mounted) Navigator.pop(ctx);
-                      });
-                    } else {
-                      statusMsg = error;
-                    }
-                  });
+                final phone = phoneController.text.trim();
+                final oldPassword = oldPasswordController.text;
+                final newPassword = newPasswordController.text.trim();
+                if (phone.isEmpty || oldPassword.isEmpty) return;
+                if (newPassword.length < 6) {
+                  setDialogState(() => statusMsg = 'Password must be at least 6 characters');
+                  return;
                 }
+                setDialogState(() => processing = true);
+                final auth = context.read<AuthProvider>();
+                final error = await auth.resetPassword(
+                  phone: phone,
+                  oldPassword: oldPassword,
+                  newPassword: newPassword,
+                );
+                setDialogState(() {
+                  processing = false;
+                  if (error == null) {
+                    statusMsg = '✅ Password updated successfully';
+                    Future.delayed(const Duration(seconds: 1), () {
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    });
+                  } else {
+                    statusMsg = error;
+                  }
+                });
               },
-              child: Text(showResetForm ? lang.t('Update', 'Hindura') : lang.t('Verify', 'Emeza')),
+              child: Text(lang.t('Update', 'Hindura')),
             ),
           ],
         ),

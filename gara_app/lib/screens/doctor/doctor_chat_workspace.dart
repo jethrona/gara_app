@@ -102,7 +102,9 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       color: Colors.white,
-      child: Row(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
         children: [
           _toolChip(
             Icons.description_rounded,
@@ -124,7 +126,7 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
             AppTheme.successGreen,
             _markComplete,
           ),
-          const Spacer(),
+          const SizedBox(width: 8),
           _toolChip(
             _showTools ? Icons.close : Icons.build_rounded,
             _showTools ? '' : lang.t('Tools', 'Ibikoresho'),
@@ -132,6 +134,7 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
             () => setState(() => _showTools = !_showTools),
           ),
         ],
+        ),
       ),
     );
   }
