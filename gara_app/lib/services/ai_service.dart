@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AIService {
@@ -22,15 +23,30 @@ class AIService {
         },
       );
 
+      debugPrint('[AIService] response.status=${response.status}');
+      debugPrint('[AIService] response.data=${response.data}');
+
       final data = response.data;
+
       if (data is Map<String, dynamic>) {
-        if (data['brief'] != null) return data['brief'] as String;
-        final err = data['details'] ?? data['error'] ?? 'unknown error';
-        return 'AI brief generation failed ($err).';
+        if (data['brief'] != null) {
+          return data['brief'] as String;
+        }
+        final errDetail = data['details'] ?? data['error'] ?? 'unknown error';
+        debugPrint('[AIService] Edge Function error: $errDetail');
+        return 'AI brief generation failed: $errDetail';
       }
-      return 'AI brief generation failed.';
+
+      debugPrint('[AIService] Unexpected response type: ${data.runtimeType}');
+      return 'AI brief generation failed (unexpected response format).';
+
+    } on FunctionException catch (e) {
+      debugPrint('[AIService] FunctionException: status=${e.status} details=${e.details}');
+      final detail = e.details?.toString() ?? e.toString();
+      return 'AI brief generation failed: $detail';
     } catch (e) {
-      return 'Unable to generate AI brief at this time';
+      debugPrint('[AIService] Unexpected error: $e');
+      return 'Unable to generate AI brief at this time ($e).';
     }
   }
 }

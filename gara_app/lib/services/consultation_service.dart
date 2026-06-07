@@ -74,21 +74,36 @@ class ConsultationService {
         .eq('id', consultationId);
   }
 
-  Future<bool> updatePaymentInfo({
+  Future<bool> verifyPayment({
     required int consultationId,
     required String transactionId,
     required double amount,
   }) async {
+    final existing = await _supabase.client
+        .from('consultations')
+        .select('status, momo_transaction_id')
+        .eq('id', consultationId)
+        .maybeSingle();
+
+    if (existing == null) return false;
+
+    if (existing['status'] == 'in_process' ||
+        existing['status'] == 'complete') {
+      return false;
+    }
+
     final res = await _supabase.client
         .from('consultations')
         .update({
-          'momo_transaction_id': transactionId,
+          'momo_transaction_id': transactionId.isEmpty ? 'MANUAL-${DateTime.now().millisecondsSinceEpoch}' : transactionId,
           'payment_amount': amount,
           'status': 'in_process',
           'paid_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('id', consultationId)
+        .eq('status', 'pending_payment')
         .select();
+
     return (res as List).isNotEmpty;
   }
 
@@ -116,7 +131,8 @@ class ConsultationService {
     try {
       final response = await _supabase.client
           .from('consultations')
-          .select('status, payment_amount, paid_at');
+          .select('status, payment_amount, paid_at')
+          .inFilter('status', ['in_process', 'complete']);
 
       final list = response as List;
       final now = DateTime.now().toUtc();
@@ -124,9 +140,13 @@ class ConsultationService {
       double incomeForDate(DateTime date) {
         return list
             .where((c) {
-              final paidAt = c['paid_at'] != null ? DateTime.parse(c['paid_at'] as String) : null;
+              final paidAt = c['paid_at'] != null
+                  ? DateTime.tryParse(c['paid_at'] as String)?.toUtc()
+                  : null;
               if (paidAt == null || c['payment_amount'] == null) return false;
-              return paidAt.year == date.year && paidAt.month == date.month && paidAt.day == date.day;
+              return paidAt.year == date.year &&
+                  paidAt.month == date.month &&
+                  paidAt.day == date.day;
             })
             .fold<double>(0.0, (sum, c) => sum + ((c['payment_amount'] as num?)?.toDouble() ?? 0.0));
       }
@@ -134,21 +154,27 @@ class ConsultationService {
       double incomeForMonth(int year, int month) {
         return list
             .where((c) {
-              final paidAt = c['paid_at'] != null ? DateTime.parse(c['paid_at'] as String) : null;
+              final paidAt = c['paid_at'] != null
+                  ? DateTime.tryParse(c['paid_at'] as String)?.toUtc()
+                  : null;
               if (paidAt == null || c['payment_amount'] == null) return false;
               return paidAt.year == year && paidAt.month == month;
             })
             .fold<double>(0.0, (sum, c) => sum + ((c['payment_amount'] as num?)?.toDouble() ?? 0.0));
       }
 
+      final activePatients = list.where((c) => c['status'] == 'in_process').length;
+
       return {
         'totalPatients': list.length,
+        'activePatients': activePatients,
         'todayIncome': incomeForDate(now),
         'monthlyIncome': incomeForMonth(now.year, now.month),
       };
     } catch (e) {
       return {
         'totalPatients': 0,
+        'activePatients': 0,
         'todayIncome': 0.0,
         'monthlyIncome': 0.0,
       };
@@ -159,7 +185,8 @@ class ConsultationService {
     required Function(Map<String, dynamic>) onUpsert,
     String? filterStatus,
   }) {
-    final channel = _supabase.client.channel('consultations-channel');
+    final channelName = 'consultations-${DateTime.now().millisecondsSinceEpoch}';
+    final channel = _supabase.client.channel(channelName);
 
     channel.onPostgresChanges(
       event: PostgresChangeEvent.all,

@@ -471,13 +471,13 @@ class DocumentService {
   // ── Save document record to DB ────────────────────────────────────────────
 
   Future<void> saveDocumentRecord({
-    required int consultationId,
+    required int? consultationId,
     required String patientId,
     required DocumentType documentKind,
     required String pdfStorageUrl,
   }) async {
     await _supabase.client.from('clinical_documents').insert({
-      'consultation_id': consultationId,
+      if (consultationId != null) 'consultation_id': consultationId,
       'patient_id': patientId,
       'document_kind': ClinicalDocumentModel.typeToString(documentKind),
       'pdf_storage_url': pdfStorageUrl,

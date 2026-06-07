@@ -19,6 +19,7 @@ class ConsultationProvider extends ChangeNotifier {
   List<ConsultationModel> _completed = [];
   Map<String, dynamic> _doctorStats = {
     'totalPatients': 0,
+    'activePatients': 0,
     'todayIncome': 0.0,
     'monthlyIncome': 0.0,
   };
@@ -57,6 +58,9 @@ class ConsultationProvider extends ChangeNotifier {
           symptomDescription: symptomDescription,
           patientName: patientName,
         );
+        if (aiBrief.startsWith('Unable to') || aiBrief.startsWith('AI brief')) {
+          aiBrief = 'AI synthesis unavailable. Manual review required.';
+        }
       } catch (e) {
         aiBrief = 'AI synthesis unavailable. Manual review required.';
       }
@@ -133,21 +137,53 @@ class ConsultationProvider extends ChangeNotifier {
     required int consultationId,
     required String transactionId,
     required double amount,
+    String? patientId,
+    String? patientName,
   }) async {
     try {
-      final updated = await _consultationService.updatePaymentInfo(
+      final updated = await _consultationService.verifyPayment(
         consultationId: consultationId,
         transactionId: transactionId,
         amount: amount,
       );
       if (updated) {
         await loadDoctorQueues();
+        if (patientId != null) {
+          final notifService = NotificationService();
+          await notifService.createNotification(
+            userId: patientId,
+            title: 'Payment Confirmed ✓',
+            body: 'Your payment of ${amount.toStringAsFixed(0)} RWF was confirmed. You can now chat with the doctor.',
+            type: 'payment',
+            consultationId: consultationId,
+          );
+        }
       }
       return updated;
     } catch (e) {
       _errorMessage = e.toString();
       notifyListeners();
       return false;
+    }
+  }
+
+  Future<void> markConsultationComplete(int consultationId, {String? patientId}) async {
+    try {
+      await _consultationService.updateConsultationStatus(consultationId, CareStatus.complete);
+      await loadDoctorQueues();
+      if (patientId != null) {
+        final notifService = NotificationService();
+        await notifService.createNotification(
+          userId: patientId,
+          title: 'Consultation Complete',
+          body: 'Your consultation has been marked as complete. Check Documents for any prescriptions or referrals.',
+          type: 'consultation',
+          consultationId: consultationId,
+        );
+      }
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
     }
   }
 
@@ -160,6 +196,7 @@ class ConsultationProvider extends ChangeNotifier {
   }
 
   void startRealtimeListener() {
+    _realtimeChannel?.unsubscribe();
     _realtimeChannel = _consultationService.subscribeToConsultations(
       onUpsert: (data) {
         loadDoctorQueues();
@@ -168,9 +205,11 @@ class ConsultationProvider extends ChangeNotifier {
   }
 
   void startPatientRealtimeListener(String patientId) {
+    _realtimeChannel?.unsubscribe();
     _realtimeChannel = _consultationService.subscribeToConsultations(
       onUpsert: (data) {
-        if (data['patient_id'] == patientId) {
+        final rowPatientId = data['patient_id']?.toString();
+        if (rowPatientId == patientId || rowPatientId == null) {
           loadPatientConsultations(patientId);
         }
       },
@@ -179,6 +218,7 @@ class ConsultationProvider extends ChangeNotifier {
 
   void disposeRealtime() {
     _realtimeChannel?.unsubscribe();
+    _realtimeChannel = null;
   }
 
   Future<void> _notifyDoctorOfNewConsultation(String patientName, int? consultationId) async {

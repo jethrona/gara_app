@@ -5,11 +5,13 @@ import '../models/consultation_model.dart';
 class ConsultationCard extends StatelessWidget {
   final ConsultationModel consultation;
   final VoidCallback onTap;
+  final Widget? trailing;
 
   const ConsultationCard({
     super.key,
     required this.consultation,
     required this.onTap,
+    this.trailing,
   });
 
   @override
@@ -101,26 +103,35 @@ class ConsultationCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Column(
+              Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      consultation.statusLabel,
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: statusColor),
-                    ),
+                  Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          consultation.statusLabel,
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: statusColor),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        consultation.createdAt != null
+                            ? '${consultation.createdAt!.hour.toString().padLeft(2, '0')}:${consultation.createdAt!.minute.toString().padLeft(2, '0')}'
+                            : '',
+                        style: const TextStyle(fontSize: 10, color: AppTheme.textMuted),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    consultation.createdAt != null
-                        ? '${consultation.createdAt!.hour.toString().padLeft(2, '0')}:${consultation.createdAt!.minute.toString().padLeft(2, '0')}'
-                        : '',
-                    style: const TextStyle(fontSize: 10, color: AppTheme.textMuted),
-                  ),
+                  if (trailing != null) ...[
+                    const SizedBox(width: 4),
+                    trailing!,
+                  ],
                 ],
               ),
             ],

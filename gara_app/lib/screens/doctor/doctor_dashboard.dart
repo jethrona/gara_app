@@ -187,15 +187,17 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
 
   void _handleNotificationTap(NotificationModel n, LanguageProvider lang) {
     if (n.consultationId != null) {
-      final consultation = context.read<ConsultationProvider>().inProcess
+      final allConsultations = [
+        ...context.read<ConsultationProvider>().inProcess,
+        ...context.read<ConsultationProvider>().pendingPayments,
+      ];
+      final consultation = allConsultations
           .where((c) => c.id == n.consultationId)
           .firstOrNull;
       if (consultation != null) {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => DoctorChatWorkspace(consultation: consultation),
-          ),
+          MaterialPageRoute(builder: (_) => DoctorChatWorkspace(consultation: consultation)),
         );
         return;
       }
@@ -493,7 +495,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(lang.t('Total Patients', 'Indwara Zose')),
+                      Text(lang.t('Total Patients (Confirmed)', 'Indwara Zose (Zemejwe)')),
                       Text('$totalPatients',
                           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
                     ],
@@ -586,20 +588,70 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
             } else if (status == CareStatus.inProcess) {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => DoctorChatWorkspace(consultation: consultation),
-                ),
-              );
+                MaterialPageRoute(builder: (_) => DoctorChatWorkspace(consultation: consultation)),
+              ).then((_) {
+                context.read<ConsultationProvider>().loadDoctorQueues();
+              });
             } else {
               _showCompletedDetails(consultation);
             }
           },
+          trailing: status == CareStatus.inProcess
+              ? IconButton(
+                  icon: const Icon(Icons.check_circle_outline_rounded, color: AppTheme.primaryGreen),
+                  tooltip: lang.t('Mark Complete', 'Rangiza'),
+                  onPressed: () => _confirmMarkComplete(consultation, lang),
+                )
+              : null,
         );
       },
     );
   }
 
+  void _confirmMarkComplete(ConsultationModel consultation, LanguageProvider lang) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(lang.t('Mark as Complete?', 'Rangiza Ubuvuzi?')),
+        content: Text(lang.t(
+          'This will end the consultation for ${consultation.patientName ?? "this patient"}. Make sure you have sent all prescriptions and referrals.',
+          'Ibi bizarangiza ubuvuzi bwa ${consultation.patientName ?? "uyu murwayi"}. Reba ko watanze ibiyandiko byose.',
+        )),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(lang.t('Cancel', 'Guhagarika')),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryGreen),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await context.read<ConsultationProvider>().markConsultationComplete(
+                consultation.id!,
+                patientId: consultation.patientId,
+              );
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(lang.t('Consultation marked as complete.', 'Ubuvuzi bwarangiye.')),
+                  backgroundColor: AppTheme.primaryGreen,
+                ));
+              }
+            },
+            child: Text(lang.t('Confirm', 'Emeza'), style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showPaymentVerification(ConsultationModel consultation) {
+    if (_confirmedPaymentIds.contains(consultation.id)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Payment already confirmed for this consultation.'),
+      ));
+      return;
+    }
+
     final lang = context.read<LanguageProvider>();
     final auth = context.read<AuthProvider>();
     final transactionController = TextEditingController();
@@ -609,80 +661,90 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 24, right: 24, top: 24,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(lang.t('Verify Payment', 'Emeza Amafaranga'),
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            Text('${lang.t("Patient:", "Umurwayi:")} ${consultation.patientName ?? "Unknown"}',
-                style: const TextStyle(color: AppTheme.textSecondary)),
-            const SizedBox(height: 20),
-            TextField(
-              controller: amountController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: lang.t('Amount (RWF)', 'Amafaranga (RWF)'),
-                prefixIcon: const Icon(Icons.monetization_on_rounded),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            left: 24, right: 24, top: 24,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(lang.t('Verify Payment', 'Emeza Amafaranga'),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Text('${lang.t("Patient:", "Umurwayi:")} ${consultation.patientName ?? "Unknown"}',
+                  style: const TextStyle(color: AppTheme.textSecondary)),
+              const SizedBox(height: 20),
+              TextField(
+                controller: amountController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: lang.t('Amount (RWF)', 'Amafaranga (RWF)'),
+                  prefixIcon: const Icon(Icons.monetization_on_rounded),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: transactionController,
-              decoration: InputDecoration(
-                labelText: lang.t('MoMo Transaction Ref', 'Ref y\'ihererekanywa'),
-                prefixIcon: const Icon(Icons.receipt_rounded),
+              const SizedBox(height: 12),
+              TextField(
+                controller: transactionController,
+                decoration: InputDecoration(
+                  labelText: lang.t('MoMo Transaction Ref (optional)', 'Ref y\'ihererekanywa (bishoboka)'),
+                  prefixIcon: const Icon(Icons.receipt_rounded),
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isConfirmingPayment
-                    ? null
-                    : () async {
-                        if (_confirmedPaymentIds.contains(consultation.id)) return;
-                        setState(() => _isConfirmingPayment = true);
-                        try {
-                          final provider = context.read<ConsultationProvider>();
-                          final notifProvider = context.read<NotificationProvider>();
-                          final updated = await provider.verifyPayment(
-                            consultationId: consultation.id!,
-                            transactionId: transactionController.text.trim(),
-                            amount: double.tryParse(amountController.text) ?? AppConstants.consultationFee,
-                          );
-                          if (updated) {
-                            _confirmedPaymentIds.add(consultation.id!);
-                            if (consultation.patientId != null) {
-                              notifProvider.createNotification(
-                                userId: consultation.patientId!,
-                                title: lang.t('Payment Confirmed', 'Amafaranga yemejwe'),
-                                body: lang.t('Your payment of ${amountController.text} RWF was confirmed. You can now chat with the doctor.', 'Amafaranga yawe yemejwe. Ushobora kuvugana na muganga.'),
-                                type: 'payment',
-                                consultationId: consultation.id,
-                              );
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isConfirmingPayment
+                      ? null
+                      : () async {
+                          setSheetState(() => _isConfirmingPayment = true);
+                          try {
+                            final provider = context.read<ConsultationProvider>();
+                            final updated = await provider.verifyPayment(
+                              consultationId: consultation.id!,
+                              transactionId: transactionController.text.trim(),
+                              amount: double.tryParse(amountController.text) ?? profileFee.toDouble(),
+                              patientId: consultation.patientId,
+                              patientName: consultation.patientName,
+                            );
+                            if (updated) {
+                              setState(() => _confirmedPaymentIds.add(consultation.id!));
+                              if (ctx.mounted) {
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text(lang.t(
+                                    'Payment confirmed. Patient moved to Active.',
+                                    'Amafaranga yemejwe. Umurwayi yimurirwa mu Bakora.',
+                                  )),
+                                  backgroundColor: AppTheme.primaryGreen,
+                                ));
+                              }
+                            } else {
+                              if (ctx.mounted) {
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text(lang.t(
+                                    'Payment was already confirmed.',
+                                    'Amafaranga yari yasemejwe.',
+                                  )),
+                                ));
+                              }
                             }
+                          } finally {
+                            if (mounted) setState(() => _isConfirmingPayment = false);
                           }
-                          if (ctx.mounted) Navigator.pop(ctx);
-                        } finally {
-                          setState(() => _isConfirmingPayment = false);
-                        }
-                      },
-                child: _isConfirmingPayment
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Text(lang.t('Confirm Payment', 'Emeza Amafaranga')),
+                        },
+                  child: _isConfirmingPayment
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : Text(lang.t('Confirm Payment', 'Emeza Amafaranga')),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -715,22 +777,40 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
               Text('${consultation.patientName ?? "Unknown"}',
                   style: const TextStyle(color: AppTheme.textSecondary)),
               const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _showPaymentVerification(consultation);
-                  },
-                  icon: const Icon(Icons.payments_rounded),
-                  label: Text(lang.t('Verify Payment', 'Emeza Amafaranga')),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryGreen,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+              if (_confirmedPaymentIds.contains(consultation.id))
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.successGreen.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_rounded, color: AppTheme.successGreen),
+                      const SizedBox(width: 8),
+                      Text(lang.t('Payment already confirmed this session.',
+                          'Amafaranga yasemejwe muri iyi seansyo.')),
+                    ],
+                  ),
+                )
+              else
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _showPaymentVerification(consultation);
+                    },
+                    icon: const Icon(Icons.payments_rounded),
+                    label: Text(lang.t('Verify Payment', 'Emeza Amafaranga')),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryGreen,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
                   ),
                 ),
-              ),
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,

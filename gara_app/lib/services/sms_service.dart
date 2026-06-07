@@ -36,7 +36,7 @@ class SmsService {
         'timestamp': DateTime.now().toIso8601String(),
       };
 
-      await _consultationService.updatePaymentInfo(
+      await _consultationService.verifyPayment(
         consultationId: consultationId,
         transactionId: ref,
         amount: amount,
