@@ -26,6 +26,7 @@ class DoctorDashboard extends StatefulWidget {
 class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isConfirmingPayment = false;
+  final Set<int> _confirmedPaymentIds = {};
 
   @override
   void initState() {
@@ -649,6 +650,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
                 onPressed: _isConfirmingPayment
                     ? null
                     : () async {
+                        if (_confirmedPaymentIds.contains(consultation.id)) return;
                         setState(() => _isConfirmingPayment = true);
                         try {
                           final provider = context.read<ConsultationProvider>();
@@ -658,14 +660,17 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
                             transactionId: transactionController.text.trim(),
                             amount: double.tryParse(amountController.text) ?? AppConstants.consultationFee,
                           );
-                          if (updated && consultation.patientId != null) {
-                            notifProvider.createNotification(
-                              userId: consultation.patientId!,
-                              title: lang.t('Payment Confirmed', 'Amafaranga yemejwe'),
-                              body: lang.t('Your payment of ${amountController.text} RWF was confirmed. You can now chat with the doctor.', 'Amafaranga yawe yemejwe. Ushobora kuvugana na muganga.'),
-                              type: 'payment',
-                              consultationId: consultation.id,
-                            );
+                          if (updated) {
+                            _confirmedPaymentIds.add(consultation.id!);
+                            if (consultation.patientId != null) {
+                              notifProvider.createNotification(
+                                userId: consultation.patientId!,
+                                title: lang.t('Payment Confirmed', 'Amafaranga yemejwe'),
+                                body: lang.t('Your payment of ${amountController.text} RWF was confirmed. You can now chat with the doctor.', 'Amafaranga yawe yemejwe. Ushobora kuvugana na muganga.'),
+                                type: 'payment',
+                                consultationId: consultation.id,
+                              );
+                            }
                           }
                           if (ctx.mounted) Navigator.pop(ctx);
                         } finally {

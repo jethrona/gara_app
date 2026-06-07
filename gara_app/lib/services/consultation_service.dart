@@ -88,7 +88,6 @@ class ConsultationService {
           'paid_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('id', consultationId)
-        .eq('status', 'pending_payment')
         .select();
     return (res as List).isNotEmpty;
   }

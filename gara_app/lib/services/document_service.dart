@@ -479,7 +479,7 @@ class DocumentService {
     await _supabase.client.from('clinical_documents').insert({
       'consultation_id': consultationId,
       'patient_id': patientId,
-      'document_kind': documentKind.name,
+      'document_kind': ClinicalDocumentModel.typeToString(documentKind),
       'pdf_storage_url': pdfStorageUrl,
       'created_at': DateTime.now().toIso8601String(),
     });

@@ -33,7 +33,7 @@ class ClinicalDocumentModel {
       if (id != null) 'id': id,
       'consultation_id': consultationId,
       'patient_id': patientId,
-      'document_kind': _typeToString(documentKind),
+      'document_kind': typeToString(documentKind),
       'pdf_storage_url': pdfStorageUrl,
     };
   }
@@ -49,7 +49,7 @@ class ClinicalDocumentModel {
     }
   }
 
-  static String _typeToString(DocumentType type) {
+  static String typeToString(DocumentType type) {
     switch (type) {
       case DocumentType.prescription:
         return 'prescription';
