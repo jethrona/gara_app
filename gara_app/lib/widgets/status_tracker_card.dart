@@ -133,7 +133,9 @@ class StatusTrackerCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Send $doctorFee RWF to $doctorPhone ($doctorName) via *182#',
+                      doctorPhone.isNotEmpty
+                          ? 'Send $doctorFee RWF to $doctorPhone ($doctorName) via *182#'
+                          : 'Pay $doctorFee RWF via MoMo (*182#) to continue with $doctorName',
                       style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
                     ),
                   ),

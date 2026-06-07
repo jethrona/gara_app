@@ -24,7 +24,7 @@ class PatientDashboard extends StatefulWidget {
   State<PatientDashboard> createState() => _PatientDashboardState();
 }
 
-class _PatientDashboardState extends State<PatientDashboard> {
+class _PatientDashboardState extends State<PatientDashboard> with WidgetsBindingObserver {
   int _currentTab = 0;
   String _doctorName = 'Doctor';
   String _doctorClinic = '';
@@ -34,7 +34,21 @@ class _PatientDashboardState extends State<PatientDashboard> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _initAfterBuild());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _fetchDoctorProfile();
+    }
   }
 
   Future<void> _fetchDoctorProfile() async {
@@ -53,7 +67,9 @@ class _PatientDashboardState extends State<PatientDashboard> {
           _doctorFee = res['consultation_fee'] as int? ?? 2000;
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('_fetchDoctorProfile error: $e');
+    }
   }
 
   void _initAfterBuild() {
@@ -490,8 +506,11 @@ class _PatientDashboardState extends State<PatientDashboard> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        lang.t('Send $_doctorFee RWF to $_doctorPhone ($_doctorName${_doctorClinic.isNotEmpty ? " - $_doctorClinic" : ""}) via MoMo (*182#)',
-                            'Ohereza $_doctorFee RWF kuri $_doctorPhone ($_doctorName${_doctorClinic.isNotEmpty ? " - $_doctorClinic" : ""}) ukoresheje MoMo (*182#)'),
+                        _doctorPhone.isNotEmpty
+                            ? lang.t('Send $_doctorFee RWF to $_doctorPhone ($_doctorName${_doctorClinic.isNotEmpty ? " - $_doctorClinic" : ""}) via MoMo (*182#)',
+                                'Ohereza $_doctorFee RWF kuri $_doctorPhone ($_doctorName${_doctorClinic.isNotEmpty ? " - $_doctorClinic" : ""}) ukoresheje MoMo (*182#)')
+                            : lang.t('Pay $_doctorFee RWF via MoMo (*182#) to continue with $_doctorName',
+                                'Ishema $_doctorFee RWF ukoresheje MoMo (*182#) kugirango ukomeze na $_doctorName'),
                         style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
                       ),
                     ),
