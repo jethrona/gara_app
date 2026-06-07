@@ -58,11 +58,8 @@ class ConsultationProvider extends ChangeNotifier {
           symptomDescription: symptomDescription,
           patientName: patientName,
         );
-        if (aiBrief.startsWith('Unable to') || aiBrief.startsWith('AI brief')) {
-          aiBrief = 'AI synthesis unavailable. Manual review required.';
-        }
       } catch (e) {
-        aiBrief = 'AI synthesis unavailable. Manual review required.';
+        debugPrint('[submitTriage] AI brief error: $e');
       }
 
       _currentConsultation = await _consultationService.createConsultation(
