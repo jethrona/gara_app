@@ -487,12 +487,7 @@ class _TriageFormState extends State<TriageForm> {
 
       if (result != null && mounted) {
         await _clearDraft();
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const PatientDashboard(),
-          ),
-        );
+        Navigator.pop(context, result);
       }
     }
   }

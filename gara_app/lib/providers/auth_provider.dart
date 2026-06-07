@@ -4,6 +4,7 @@ import '../config/constants.dart';
 import '../models/profile_model.dart';
 import '../services/auth_service.dart';
 import '../services/error_handler.dart';
+import '../services/supabase_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -348,15 +349,26 @@ class AuthProvider extends ChangeNotifier {
   }) async {
     if (_userId.isEmpty) return;
     try {
-      await _authService.updateProfile(
-        id: _userId,
-        fullName: fullName,
-        clinicName: clinicName,
-        phoneNumber: phoneNumber,
-        consultationFee: consultationFee,
-      );
-      _profile = await _authService.getProfile(_userId);
-      notifyListeners();
+      final payload = <String, dynamic>{
+        'id': _userId,
+        'full_name': fullName.trim(),
+        'clinic_name': (clinicName?.trim().isNotEmpty == true) ? clinicName!.trim() : null,
+        'phone_number': phoneNumber.trim(),
+        'consultation_fee': consultationFee,
+      };
+      debugPrint('[AuthProvider] updateDoctorSettings upsert: $payload');
+      final result = await SupabaseService().client
+          .from('profiles')
+          .upsert(payload, onConflict: 'id')
+          .select()
+          .maybeSingle();
+      if (result != null) {
+        _profile = ProfileModel.fromMap(result);
+        notifyListeners();
+        debugPrint('[AuthProvider] Doctor settings saved: name=$fullName, phone=$phoneNumber, fee=$consultationFee');
+      } else {
+        debugPrint('[AuthProvider] WARNING: upsert returned null (RLS may be blocking)');
+      }
     } catch (e) {
       _setError(e.toString());
     }

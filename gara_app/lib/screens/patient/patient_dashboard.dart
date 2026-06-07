@@ -13,6 +13,7 @@ import '../../widgets/language_toggle.dart';
 import '../../widgets/status_tracker_card.dart';
 import '../../models/notification_model.dart';
 import 'triage_form.dart';
+import 'triage_success_screen.dart';
 import 'patient_chat_screen.dart';
 import 'documents_screen.dart';
 import '../auth/onboarding_screen.dart';
@@ -30,6 +31,7 @@ class _PatientDashboardState extends State<PatientDashboard> with WidgetsBinding
   String _doctorClinic = '';
   String _doctorPhone = '';
   int _doctorFee = 2000;
+  bool _hasAutoNavigated = false;
 
   @override
   void initState() {
@@ -88,13 +90,16 @@ class _PatientDashboardState extends State<PatientDashboard> with WidgetsBinding
     }
   }
 
-  void _loadData() {
+  Future<void> _loadData() async {
+    _hasAutoNavigated = false;
     final auth = context.read<AuthProvider>();
     final consultationProvider = context.read<ConsultationProvider>();
     final notifProvider = context.read<NotificationProvider>();
     if (auth.userId.isNotEmpty) {
-      _fetchDoctorProfile();
-      consultationProvider.loadPatientConsultations(auth.userId);
+      await Future.wait([
+        _fetchDoctorProfile(),
+        consultationProvider.loadPatientConsultations(auth.userId),
+      ]);
       consultationProvider.startPatientRealtimeListener(auth.userId);
       notifProvider.init(auth.userId);
       notifProvider.setOnPaymentReceived(() async {
@@ -105,14 +110,15 @@ class _PatientDashboardState extends State<PatientDashboard> with WidgetsBinding
   }
 
   void _autoNavigateToChat(String userId) {
-    if (!mounted) return;
+    if (!mounted || _hasAutoNavigated) return;
     final consultations = context.read<ConsultationProvider>().patientConsultations;
     final active = consultations.where((c) => c.status == CareStatus.inProcess).firstOrNull;
     if (active != null) {
+      _hasAutoNavigated = true;
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => PatientChatScreen(consultation: active)),
-      );
+      ).then((_) => _hasAutoNavigated = false);
     }
   }
 
@@ -302,7 +308,7 @@ class _PatientDashboardState extends State<PatientDashboard> with WidgetsBinding
       int pendingCount, int inProcessCount, int completedCount) {
     final consultationProvider = context.read<ConsultationProvider>();
     return RefreshIndicator(
-      onRefresh: () async => _loadData(),
+      onRefresh: _loadData,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
@@ -405,10 +411,23 @@ class _PatientDashboardState extends State<PatientDashboard> with WidgetsBinding
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const TriageForm()),
-              ),
+              onPressed: () async {
+                final result = await Navigator.push<ConsultationModel>(
+                  context,
+                  MaterialPageRoute(builder: (_) => const TriageForm()),
+                );
+                if (result != null && mounted) {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => TriageSuccessScreen(consultation: result),
+                    ),
+                  );
+                  final auth = context.read<AuthProvider>();
+                  await _loadData();
+                  _autoNavigateToChat(auth.userId);
+                }
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: AppTheme.primaryGreen,
