@@ -1,6 +1,13 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
-const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+// ── SETUP ─────────────────────────────────────────────────────────────────
+// 1. Get a free API key at https://console.groq.com
+// 2. Supabase Dashboard → Project Settings → Edge Functions → Secrets
+//    Add: GROQ_API_KEY = <your key>
+// 3. Deploy: supabase functions deploy generate-ai-brief --project-ref <ref>
+// ──────────────────────────────────────────────────────────────────────────
+
+const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,23 +37,16 @@ serve(async (req: Request) => {
     );
   }
 
-  if (!GEMINI_API_KEY) {
-    console.error("GEMINI_API_KEY secret is not set in Supabase Edge Function secrets.");
+  if (!GROQ_API_KEY) {
     return new Response(
       JSON.stringify({
-        error: "GEMINI_API_KEY not configured",
+        error: "GROQ_API_KEY not configured",
         details:
-          "Go to Supabase Dashboard -> Project Settings -> Edge Functions -> Secrets and add GEMINI_API_KEY.",
+          "Go to Supabase Dashboard → Project Settings → Edge Functions → Secrets and add GROQ_API_KEY.",
       }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
-
-  const GEMINI_API_URL =
-    `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
 
   let body: GenerateRequest;
   try {
@@ -71,89 +71,75 @@ serve(async (req: Request) => {
     }
   }
 
-  const prompt = `You are a medical triage AI assistant for the Gara Telemedicine Platform in Rwanda. Generate a concise, objective clinical brief in English based on the following patient-reported information.
+  const systemPrompt =
+    "You are a medical triage AI assistant for the Gara Telemedicine Platform in Rwanda. " +
+    "Generate a concise, objective clinical brief in English based on the patient-reported information below. " +
+    "Format your response exactly as follows:\n\n" +
+    "CLINICAL BRIEF:\n" +
+    "- Presenting Complaint: [1-2 sentence summary]\n" +
+    "- Duration: [summary]\n" +
+    "- Severity Assessment: [assessment]\n" +
+    "- Key Symptoms: [bullet points]\n" +
+    "- Recommended Action: [recommendation]\n\n" +
+    "Keep the response professional, objective, and under 250 words. " +
+    "Do not provide a diagnosis — only summarize the reported symptoms for the attending doctor.";
 
-Patient: ${body.patientName}
-Biological Sex: ${body.biologicalSex}
-Symptom Category: ${body.symptomCategory}
-Severity Level: ${body.severityLevel}
-Duration of Symptoms: ${body.durationSymptoms}
-Patient's Description: ${body.symptomDescription}
-
-Format your response exactly as follows:
-
-CLINICAL BRIEF:
-- Presenting Complaint: [1-2 sentence summary]
-- Duration: [summary]
-- Severity Assessment: [assessment]
-- Key Symptoms: [bullet points]
-- Recommended Action: [recommendation]
-
-Keep the response professional, objective, and under 250 words. Do not provide a diagnosis -- only summarize the reported symptoms for the attending doctor.`;
+  const userPrompt =
+    `Patient: ${body.patientName}\n` +
+    `Biological Sex: ${body.biologicalSex}\n` +
+    `Symptom Category: ${body.symptomCategory}\n` +
+    `Severity Level: ${body.severityLevel}\n` +
+    `Duration of Symptoms: ${body.durationSymptoms}\n` +
+    `Patient's Description: ${body.symptomDescription}`;
 
   try {
-    console.log(`[generate-ai-brief] Calling Gemini for patient: ${body.patientName}`);
+    console.log(`[generate-ai-brief] Calling Groq for patient: ${body.patientName}`);
 
-    const geminiResponse = await fetch(GEMINI_API_URL, {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
+      },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.3,
-          topP: 0.8,
-          topK: 40,
-          maxOutputTokens: 1024,
-        },
-        safetySettings: [
-          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
-          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+        model: "llama3-70b-8192",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
         ],
+        temperature: 0.3,
+        max_tokens: 1024,
+        top_p: 0.8,
       }),
     });
 
-    if (!geminiResponse.ok) {
-      const errorText = await geminiResponse.text();
-      console.error(`[generate-ai-brief] Gemini API error ${geminiResponse.status}: ${errorText}`);
-
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[generate-ai-brief] Groq API error ${response.status}: ${errorText}`);
       return new Response(
         JSON.stringify({
-          error: "Gemini API error",
-          details: `HTTP ${geminiResponse.status}: ${errorText}`,
+          error: "Groq API error",
+          details: `HTTP ${response.status}: ${errorText}`,
         }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const data = await geminiResponse.json();
-
-    if (data?.promptFeedback?.blockReason) {
-      console.warn(`[generate-ai-brief] Prompt blocked: ${data.promptFeedback.blockReason}`);
-      return new Response(
-        JSON.stringify({
-          error: "Content filtered",
-          details: `Gemini blocked the prompt: ${data.promptFeedback.blockReason}`,
-        }),
-        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const data = await response.json();
+    const text = data?.choices?.[0]?.message?.content;
 
     if (!text) {
-      console.error("[generate-ai-brief] No text in Gemini response:", JSON.stringify(data));
+      console.error("[generate-ai-brief] No text in Groq response:", JSON.stringify(data));
       return new Response(
         JSON.stringify({
           error: "No text in response",
-          details: "Gemini returned an empty response. Check your API key quota.",
+          details: "Groq returned an empty response.",
         }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`[generate-ai-brief] Success -- brief generated (${text.length} chars)`);
+    console.log(`[generate-ai-brief] Success — brief generated (${text.length} chars)`);
 
     return new Response(
       JSON.stringify({ brief: text.trim() }),
