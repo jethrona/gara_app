@@ -2,6 +2,8 @@
 -- Fully idempotent (safe to run multiple times)
 
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS consultation_fee INTEGER DEFAULT 2000;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS reset_otp TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS reset_otp_expiry TIMESTAMPTZ;
 
 ALTER TABLE consultations ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
 

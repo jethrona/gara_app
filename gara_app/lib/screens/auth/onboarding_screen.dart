@@ -347,11 +347,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
   void _showForgotPassword(LanguageProvider lang) {
     final phoneController = TextEditingController();
-    final oldPasswordController = TextEditingController();
+    final otpController = TextEditingController();
     final newPasswordController = TextEditingController();
-    bool showOldPassword = false;
     bool showNewPassword = false;
     bool processing = false;
+    bool codeSent = false;
     String? statusMsg;
 
     showDialog(
@@ -365,42 +365,44 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(lang.t('Enter your phone number and current password, then choose a new password.', 'Shyiramo numero yawe n\'ijambo ry\'ibanga rya none, hanyuma hitamo rishya.')),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(
-                    labelText: lang.t('Phone Number', 'Nomero ya Telefone'),
-                    prefixIcon: const Icon(Icons.phone_android),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: oldPasswordController,
-                  obscureText: !showOldPassword,
-                  decoration: InputDecoration(
-                    labelText: lang.t('Current Password', 'Ijambo ry\'ibanga rya none'),
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    suffixIcon: IconButton(
-                      icon: Icon(showOldPassword ? Icons.visibility_off : Icons.visibility),
-                      onPressed: () => setDialogState(() => showOldPassword = !showOldPassword),
+                if (!codeSent) ...[
+                  Text(lang.t('Enter your phone number to receive a reset code.', 'Shyiramo numero yawe kugirango wakire kode yo guhindura.')),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: lang.t('Phone Number', 'Nomero ya Telefone'),
+                      prefixIcon: const Icon(Icons.phone_android),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: newPasswordController,
-                  obscureText: !showNewPassword,
-                  decoration: InputDecoration(
-                    labelText: lang.t('New Password', 'Ijambo ry\'ibanga rishya'),
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    suffixIcon: IconButton(
-                      icon: Icon(showNewPassword ? Icons.visibility_off : Icons.visibility),
-                      onPressed: () => setDialogState(() => showNewPassword = !showNewPassword),
+                ] else ...[
+                  Text(lang.t('Enter the reset code and your new password.', 'Shyiramo kode n\'ijambo ry\'ibanga rishya.')),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: otpController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    decoration: InputDecoration(
+                      labelText: lang.t('Reset Code', 'Kode yo Guhindura'),
+                      prefixIcon: const Icon(Icons.pin),
+                      counterText: '',
                     ),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: newPasswordController,
+                    obscureText: !showNewPassword,
+                    decoration: InputDecoration(
+                      labelText: lang.t('New Password', 'Ijambo ry\'ibanga rishya'),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(showNewPassword ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setDialogState(() => showNewPassword = !showNewPassword),
+                      ),
+                    ),
+                  ),
+                ],
                 if (statusMsg != null) ...[
                   const SizedBox(height: 12),
                   Text(statusMsg!, style: TextStyle(color: statusMsg!.contains('✅') ? AppTheme.successGreen : AppTheme.errorRed, fontSize: 13)),
@@ -416,34 +418,50 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
             ),
             TextButton(
               onPressed: processing ? null : () async {
-                final phone = phoneController.text.trim();
-                final oldPassword = oldPasswordController.text;
-                final newPassword = newPasswordController.text.trim();
-                if (phone.isEmpty || oldPassword.isEmpty) return;
-                if (newPassword.length < 6) {
-                  setDialogState(() => statusMsg = 'Password must be at least 6 characters');
-                  return;
-                }
-                setDialogState(() => processing = true);
                 final auth = context.read<AuthProvider>();
-                final error = await auth.resetPassword(
-                  phone: phone,
-                  oldPassword: oldPassword,
-                  newPassword: newPassword,
-                );
-                setDialogState(() {
-                  processing = false;
-                  if (error == null) {
-                    statusMsg = '✅ Password updated successfully';
-                    Future.delayed(const Duration(seconds: 1), () {
-                      if (ctx.mounted) Navigator.pop(ctx);
-                    });
-                  } else {
-                    statusMsg = error;
+
+                if (!codeSent) {
+                  final phone = phoneController.text.trim();
+                  if (phone.isEmpty) return;
+                  setDialogState(() { processing = true; statusMsg = null; });
+                  final error = await auth.sendPasswordResetOtp(phone);
+                  setDialogState(() {
+                    processing = false;
+                    if (error == null) {
+                      statusMsg = '✅ Reset code sent to your phone. Check the debug console or SMS.';
+                      codeSent = true;
+                    } else {
+                      statusMsg = error;
+                    }
+                  });
+                } else {
+                  final otp = otpController.text.trim();
+                  final newPassword = newPasswordController.text.trim();
+                  if (otp.length < 4) return;
+                  if (newPassword.length < 6) {
+                    setDialogState(() => statusMsg = 'Password must be at least 6 characters');
+                    return;
                   }
-                });
+                  setDialogState(() { processing = true; statusMsg = null; });
+                  final error = await auth.verifyResetOtpAndUpdatePassword(
+                    phone: phoneController.text.trim(),
+                    otp: otp,
+                    newPassword: newPassword,
+                  );
+                  setDialogState(() {
+                    processing = false;
+                    if (error == null) {
+                      statusMsg = '✅ Password reset successfully';
+                      Future.delayed(const Duration(seconds: 1), () {
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      });
+                    } else {
+                      statusMsg = error;
+                    }
+                  });
+                }
               },
-              child: Text(lang.t('Update', 'Hindura')),
+              child: Text(codeSent ? lang.t('Reset', 'Hindura') : lang.t('Send Code', 'Ohereza Kode')),
             ),
           ],
         ),

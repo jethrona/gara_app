@@ -301,6 +301,75 @@ class AuthService {
     }).eq('id', userId);
   }
 
+  // ── Password Reset OTP ──
+
+  /// Generates a 6-digit OTP, stores it + expiry on the profile row,
+  /// and returns the OTP code. In production this would be sent via SMS.
+  Future<String?> generateResetOtp(String phone) async {
+    final response = await _supabase.client
+        .from('profiles')
+        .select('id')
+        .eq('phone_number', phone)
+        .limit(1);
+    final list = response as List;
+    if (list.isEmpty) return null;
+
+    final otp = _random.nextInt(900000) + 100000; // 6 digits
+    final expiry = DateTime.now().add(const Duration(minutes: 15)).toIso8601String();
+
+    await _supabase.client
+        .from('profiles')
+        .update({'reset_otp': otp.toString(), 'reset_otp_expiry': expiry})
+        .eq('phone_number', phone);
+
+    debugPrint('[AuthService] OTP for $phone: $otp (expires $expiry)');
+    return otp.toString();
+  }
+
+  /// Verifies OTP and, if valid, updates the password.
+  /// Returns null on success, error message on failure.
+  Future<String?> verifyAndResetPassword(
+      String phone, String otp, String newPassword) async {
+    final response = await _supabase.client
+        .from('profiles')
+        .select('id, reset_otp, reset_otp_expiry')
+        .eq('phone_number', phone)
+        .limit(1);
+    final list = response as List;
+    if (list.isEmpty) return 'No account found with this phone number';
+
+    final row = list.first as Map<String, dynamic>;
+    final storedOtp = row['reset_otp'] as String?;
+    final expiryStr = row['reset_otp_expiry'] as String?;
+
+    if (storedOtp == null || expiryStr == null) {
+      return 'No reset code requested. Please request a new code.';
+    }
+
+    if (storedOtp != otp) {
+      return 'Wrong reset code. Please try again.';
+    }
+
+    final expiry = DateTime.parse(expiryStr);
+    if (DateTime.now().isAfter(expiry)) {
+      return 'Reset code has expired. Please request a new one.';
+    }
+
+    // OTP valid — update password and clear OTP fields
+    final userId = row['id'] as String;
+    final salt = _generateSalt();
+    final hash = _hashPassword(newPassword, salt);
+    await _supabase.client.from('profiles').update({
+      'password_hash': hash,
+      'password_salt': salt,
+      'reset_otp': null,
+      'reset_otp_expiry': null,
+    }).eq('id', userId);
+
+    debugPrint('[AuthService] Password reset successful for $phone');
+    return null;
+  }
+
   // ── Avatar upload ──
 
   Future<String> uploadAvatar({

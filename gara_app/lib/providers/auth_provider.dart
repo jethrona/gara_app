@@ -303,24 +303,28 @@ class AuthProvider extends ChangeNotifier {
     return null;
   }
 
-  Future<String?> resetPassword({
+  Future<String?> sendPasswordResetOtp(String phone) async {
+    try {
+      final otp = await _authService.generateResetOtp(phone);
+      if (otp == null) return 'No account found with this phone number';
+      return null; // success — OTP generated (shown in debugPrint)
+    } catch (e) {
+      return ErrorHandler.friendly(e.toString());
+    }
+  }
+
+  Future<String?> verifyResetOtpAndUpdatePassword({
     required String phone,
-    required String oldPassword,
+    required String otp,
     required String newPassword,
   }) async {
-    if (newPassword.length < 6) {
-      return 'Password must be at least 6 characters';
-    }
+    if (newPassword.length < 6) return 'Password must be at least 6 characters';
     try {
-      final profile = await _authService.login(phone, oldPassword);
-      if (profile == null) {
-        return 'Wrong current password';
-      }
-      await _authService.updatePassword(profile.id, newPassword);
-      if (_rememberMe) {
+      final error = await _authService.verifyAndResetPassword(phone, otp, newPassword);
+      if (error == null && _rememberMe) {
         await _authService.saveRememberedCredentials(phone, newPassword);
       }
-      return null;
+      return error;
     } catch (e) {
       return ErrorHandler.friendly(e.toString());
     }
