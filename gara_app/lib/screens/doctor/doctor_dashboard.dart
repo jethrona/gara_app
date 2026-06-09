@@ -10,6 +10,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/consultation_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/follow_up_provider.dart';
 import '../../widgets/consultation_card.dart';
 import '../../widgets/financial_ticker.dart';
 import '../../widgets/language_toggle.dart';
@@ -32,7 +33,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _initDoctor();
   }
 
@@ -40,10 +41,12 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
     final consultationProvider = context.read<ConsultationProvider>();
     final notifProvider = context.read<NotificationProvider>();
     final auth = context.read<AuthProvider>();
+    final followUpProvider = context.read<FollowUpProvider>();
     consultationProvider.loadDoctorQueues();
     consultationProvider.startRealtimeListener();
     if (auth.profile != null) {
       notifProvider.init(auth.userId);
+      followUpProvider.initAsDoctor(auth.userId);
     }
   }
 
@@ -519,6 +522,8 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
 
   Widget _buildTabBar(LanguageProvider lang, ConsultationProvider provider) {
     final regularCount = provider.regularPatients.length;
+    final followUpProvider = context.watch<FollowUpProvider>();
+    final followUpCount = followUpProvider.followUps.length;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
@@ -535,6 +540,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
           Tab(text: '${lang.t("Active", "Igikora")} (${provider.inProcess.length})'),
           Tab(text: '${lang.t("Complete", "Byarangiye")} (${provider.completed.length})'),
           Tab(text: '${lang.t("Regular", "Bakunze")} ($regularCount)'),
+          Tab(text: '${lang.t("Follow-ups", "Gukurikirana")} ($followUpCount)'),
         ],
       ),
     );
@@ -548,6 +554,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
         _buildQueueList(lang, provider.inProcess, CareStatus.inProcess),
         _buildQueueList(lang, provider.completed, CareStatus.complete),
         _buildRegularPatients(lang, provider),
+        _buildFollowUpsTab(lang),
       ],
     );
   }
@@ -741,6 +748,98 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
       itemBuilder: (_, i) {
         final p = patients[i];
         return _buildPatientTile(lang, p, provider);
+      },
+    );
+  }
+
+  Widget _buildFollowUpsTab(LanguageProvider lang) {
+    final followUpProvider = context.watch<FollowUpProvider>();
+    final followUps = followUpProvider.followUps;
+
+    if (followUpProvider.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (followUps.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.follow_the_signs_outlined, size: 48, color: AppTheme.textMuted),
+            const SizedBox(height: 12),
+            Text(lang.t('No follow-ups yet', 'Nta gukurikirana bihari'),
+                style: const TextStyle(fontSize: 16, color: AppTheme.textMuted)),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: followUps.length,
+      itemBuilder: (_, i) {
+        final f = followUps[i];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        f.patientName ?? lang.t('Patient', 'Umurwayi'),
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: f.hasReply ? AppTheme.primaryGreen.withValues(alpha: 0.15) : AppTheme.warningYellow.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        f.hasReply ? lang.t('Replied', 'Yasubiyeyo') : lang.t('Pending', 'Itegereje'),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: f.hasReply ? AppTheme.primaryGreen : AppTheme.warningYellow,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  f.doctorMessage,
+                  style: const TextStyle(fontSize: 14),
+                ),
+                if (f.hasReply) ...[
+                  const Divider(height: 20),
+                  Text(
+                    '${lang.t("Patient reply:", "Igisubizo cy'umurwayi:")}',
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: AppTheme.textMuted),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(f.patientReply!, style: const TextStyle(fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Text(
+                    f.repliedAt?.toLocal().toString().substring(0, 16) ?? '',
+                    style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Text(
+                  f.createdAt.toLocal().toString().substring(0, 16),
+                  style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                ),
+              ],
+            ),
+          ),
+        );
       },
     );
   }
@@ -1082,7 +1181,66 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
           ],
         ),
         actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showSendFollowUp(consultation);
+            },
+            child: Text(lang2.t('Send Follow-up', 'Ohereza Gukurikirana')),
+          ),
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text(lang2.t('Close', 'Funga'))),
+        ],
+      ),
+    );
+  }
+
+  void _showSendFollowUp(ConsultationModel consultation) {
+    final lang2 = context.read<LanguageProvider>();
+    final auth = context.read<AuthProvider>();
+    final patientId = consultation.patientId;
+    if (patientId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(lang2.t('Patient ID not found.', 'Umurwayi ntiyabonetse.')),
+      ));
+      return;
+    }
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(lang2.t('Send Follow-up', 'Ohereza Gukurikirana')),
+        content: TextField(
+          controller: controller,
+          maxLines: 4,
+          decoration: InputDecoration(
+            hintText: lang2.t('Write your follow-up message...', 'Andika ubutumwa bwo gukurikirana...'),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(lang2.t('Cancel', 'Reka'))),
+          FilledButton(
+            onPressed: () async {
+              if (controller.text.trim().isEmpty) return;
+              Navigator.pop(ctx);
+              final followUpProvider = context.read<FollowUpProvider>();
+              await followUpProvider.createFollowUp(
+                consultationId: consultation.id!,
+                doctorId: auth.userId,
+                patientId: patientId,
+                doctorMessage: controller.text.trim(),
+                onNotificationSent: () {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(lang2.t('Follow-up sent!', 'Gukurikirana koherejwe!')),
+                      backgroundColor: AppTheme.primaryGreen,
+                    ));
+                  }
+                },
+              );
+            },
+            child: Text(lang2.t('Send', 'Ohereza')),
+          ),
         ],
       ),
     );

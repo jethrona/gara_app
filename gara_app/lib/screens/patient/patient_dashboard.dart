@@ -6,12 +6,14 @@ import '../../config/theme.dart';
 import '../../models/consultation_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/consultation_provider.dart';
+import '../../providers/follow_up_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/language_toggle.dart';
 import '../../widgets/status_tracker_card.dart';
 import '../../models/notification_model.dart';
+import '../../models/follow_up_model.dart';
 import 'triage_form.dart';
 import 'triage_success_screen.dart';
 import 'patient_chat_screen.dart';
@@ -78,11 +80,13 @@ class _PatientDashboardState extends State<PatientDashboard> with WidgetsBinding
     final auth = context.read<AuthProvider>();
     final consultationProvider = context.read<ConsultationProvider>();
     final notifProvider = context.read<NotificationProvider>();
+    final followUpProvider = context.read<FollowUpProvider>();
     if (auth.userId.isNotEmpty) {
       _fetchDoctorProfile();
       consultationProvider.loadPatientConsultations(auth.userId);
       consultationProvider.startPatientRealtimeListener(auth.userId);
       notifProvider.init(auth.userId);
+      followUpProvider.initAsPatient(auth.userId);
       notifProvider.setOnPaymentReceived(() async {
         await consultationProvider.loadPatientConsultations(auth.userId);
         _autoNavigateToChat(auth.userId);
@@ -248,6 +252,7 @@ class _PatientDashboardState extends State<PatientDashboard> with WidgetsBinding
                                 leading: Icon(
                                   n.type == 'payment' ? Icons.payments_rounded :
                                   n.type == 'consultation' ? Icons.medical_services_rounded :
+                                  n.type == 'follow_up' ? Icons.follow_the_signs_rounded :
                                   Icons.info_rounded,
                                   color: n.isRead ? AppTheme.textMuted : AppTheme.primaryGreen,
                                 ),
@@ -275,6 +280,10 @@ class _PatientDashboardState extends State<PatientDashboard> with WidgetsBinding
   }
 
   void _handleNotificationTap(NotificationModel n) {
+    if (n.type == 'follow_up') {
+      _showFollowUpReplyDialog(n);
+      return;
+    }
     if (n.type == 'payment' || n.type == 'consultation') {
       if (n.consultationId != null) {
         final consultation = context.read<ConsultationProvider>().patientConsultations
@@ -302,6 +311,122 @@ class _PatientDashboardState extends State<PatientDashboard> with WidgetsBinding
         );
       }
     }
+  }
+
+  void _showFollowUpReplyDialog(NotificationModel n) {
+    final lang2 = context.read<LanguageProvider>();
+    final followUpProvider = context.read<FollowUpProvider>();
+    final followUp = followUpProvider.followUps.isNotEmpty
+        ? followUpProvider.followUps.first
+        : null;
+
+    if (followUp == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(lang2.t('No follow-up found.', 'Nta gukurikirana bibonetse.')),
+      ));
+      return;
+    }
+
+    if (followUp.hasReply) {
+      _showFollowUpDetails(followUp, lang2);
+      return;
+    }
+
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(lang2.t('Follow-up Reply', 'Igisubizo cyo gukurikirana')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${lang2.t('Doctor:', 'Muganga:')} ${followUp.doctorName ?? lang2.t('Doctor', 'Muganga')}'),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceBg,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(followUp.doctorMessage),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: lang2.t('Type your reply...', 'Andika igisubizo cyawe...'),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(lang2.t('Cancel', 'Reka'))),
+          FilledButton(
+            onPressed: () async {
+              if (controller.text.trim().isEmpty) return;
+              Navigator.pop(ctx);
+              final auth = context.read<AuthProvider>();
+              await followUpProvider.submitReply(
+                followUpId: followUp.id!,
+                patientReply: controller.text.trim(),
+                doctorId: followUp.doctorId,
+                onReplied: () {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(lang2.t('Reply sent!', 'Igisubizo cyoherejwe!')),
+                      backgroundColor: AppTheme.primaryGreen,
+                    ));
+                  }
+                },
+              );
+            },
+            child: Text(lang2.t('Send Reply', 'Ohereza Igisubizo')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFollowUpDetails(FollowUpModel followUp, LanguageProvider lang2) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(lang2.t('Follow-up', 'Gukurikirana')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${lang2.t('Doctor:', 'Muganga:')} ${followUp.doctorName ?? lang2.t('Doctor', 'Muganga')}'),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceBg,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(followUp.doctorMessage),
+            ),
+            if (followUp.hasReply) ...[
+              const Divider(height: 20),
+              Text(lang2.t('Your Reply:', 'Igisubizo cyawe:'), style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Text(followUp.patientReply!),
+              const SizedBox(height: 4),
+              Text(
+                followUp.repliedAt?.toLocal().toString().substring(0, 16) ?? '',
+                style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(lang2.t('Close', 'Funga'))),
+        ],
+      ),
+    );
   }
 
   Widget _buildDashboard(LanguageProvider lang, ConsultationModel? active,

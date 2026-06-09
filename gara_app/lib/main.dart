@@ -6,6 +6,7 @@ import 'providers/chat_provider.dart';
 import 'providers/consultation_provider.dart';
 import 'providers/language_provider.dart';
 import 'providers/notification_provider.dart';
+import 'providers/follow_up_provider.dart';
 import 'services/supabase_service.dart';
 import 'screens/splash_screen.dart';
 
@@ -22,6 +23,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ConsultationProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => FollowUpProvider()),
       ],
       child: const GaraApp(),
     ),
