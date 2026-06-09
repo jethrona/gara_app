@@ -67,9 +67,12 @@ class ConsultationCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          consultation.patientName ?? 'Patient #${consultation.id}',
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                        Flexible(
+                          child: Text(
+                            consultation.patientName ?? 'Patient #${consultation.id}',
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Container(
@@ -119,36 +122,41 @@ class ConsultationCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          consultation.statusLabel,
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: statusColor),
-                        ),
+              IntrinsicWidth(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              consultation.statusLabel,
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: statusColor),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            consultation.createdAt != null
+                                ? '${consultation.createdAt!.toLocal().hour.toString().padLeft(2, '0')}:${consultation.createdAt!.toLocal().minute.toString().padLeft(2, '0')}'
+                                : '',
+                            style: const TextStyle(fontSize: 10, color: AppTheme.textMuted),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        consultation.createdAt != null
-                            ? '${consultation.createdAt!.hour.toString().padLeft(2, '0')}:${consultation.createdAt!.minute.toString().padLeft(2, '0')}'
-                            : '',
-                        style: const TextStyle(fontSize: 10, color: AppTheme.textMuted),
-                      ),
+                    ),
+                    if (trailing != null) ...[
+                      const SizedBox(width: 4),
+                      trailing!,
                     ],
-                  ),
-                  if (trailing != null) ...[
-                    const SizedBox(width: 4),
-                    trailing!,
                   ],
-                ],
+                ),
               ),
             ],
           ),

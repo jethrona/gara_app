@@ -800,7 +800,19 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
                     return ListTile(
                       dense: true,
                       title: Text('${c.statusLabel} — ${c.paymentAmount} RWF'),
-                      subtitle: Text(c.createdAt?.toString().substring(0, 16) ?? ''),
+                      subtitle: Text(
+                        c.createdAt?.toLocal().toString().substring(0, 16) ?? '',
+                      ),
+                      trailing: const Icon(Icons.chevron_right, size: 18),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => DoctorChatWorkspace(consultation: c),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
