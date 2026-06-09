@@ -27,11 +27,12 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
   late TabController _tabController;
   bool _isConfirmingPayment = false;
   final Set<int> _confirmedPaymentIds = {};
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _initDoctor();
   }
 
@@ -49,6 +50,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -98,8 +100,13 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
         child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(child: _buildFinancialTickers(lang, stats)),
-            SliverToBoxAdapter(child: _buildTabBar(lang, consultationProvider)),
-            SliverFillRemaining(child: _buildTabContent(lang, consultationProvider)),
+            SliverToBoxAdapter(child: _buildSearchBar(lang)),
+            if (_searchController.text.isNotEmpty)
+              SliverToBoxAdapter(child: _buildSearchResults(lang, consultationProvider))
+            else ...[
+              SliverToBoxAdapter(child: _buildTabBar(lang, consultationProvider)),
+              SliverFillRemaining(child: _buildTabContent(lang, consultationProvider)),
+            ],
           ],
         ),
       ),
@@ -511,6 +518,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
   }
 
   Widget _buildTabBar(LanguageProvider lang, ConsultationProvider provider) {
+    final regularCount = provider.regularPatients.length;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
@@ -521,10 +529,12 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
       child: TabBar(
         controller: _tabController,
         onTap: (_) => setState(() {}),
+        isScrollable: true,
         tabs: [
           Tab(text: '${lang.t("Payments", "Amafaranga")} (${provider.pendingPayments.length})'),
           Tab(text: '${lang.t("Active", "Igikora")} (${provider.inProcess.length})'),
           Tab(text: '${lang.t("Complete", "Byarangiye")} (${provider.completed.length})'),
+          Tab(text: '${lang.t("Regular", "Bakunze")} ($regularCount)'),
         ],
       ),
     );
@@ -537,12 +547,16 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
         _buildQueueList(lang, provider.pendingPayments, CareStatus.pendingPayment),
         _buildQueueList(lang, provider.inProcess, CareStatus.inProcess),
         _buildQueueList(lang, provider.completed, CareStatus.complete),
+        _buildRegularPatients(lang, provider),
       ],
     );
   }
 
   Widget _buildQueueList(LanguageProvider lang, List<ConsultationModel> items, CareStatus status) {
     final consultationProvider = context.read<ConsultationProvider>();
+    final isReturningMap = Map.fromEntries(
+      items.map((c) => MapEntry(c.patientId, consultationProvider.isReturningPatient(c.patientId))),
+    );
     if (consultationProvider.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -582,6 +596,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
         final consultation = items[index];
         return ConsultationCard(
           consultation: consultation,
+          isReturning: isReturningMap[consultation.patientId] ?? false,
           onTap: () {
             if (status == CareStatus.pendingPayment) {
               _showPendingPaymentOptions(consultation);
@@ -605,6 +620,195 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
               : null,
         );
       },
+    );
+  }
+
+  Widget _buildSearchBar(LanguageProvider lang) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (q) => context.read<ConsultationProvider>().searchPatients(q),
+        decoration: InputDecoration(
+          hintText: lang.t('Search patients by name or phone...', 'Shaka abarwayi ku izina cyangwa numero...'),
+          prefixIcon: const Icon(Icons.search_rounded),
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchResults(LanguageProvider lang, ConsultationProvider provider) {
+    if (_searchController.text.isEmpty) return const SizedBox.shrink();
+    final results = provider.searchResults;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Text(lang.t('Search Results', 'Ibyavuye mu Bushakashatsi'),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+        ),
+        if (provider.isSearching)
+          const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()))
+        else if (results.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Center(child: Text(lang.t('No patients found', 'Nta barwayi babonetse'),
+                style: const TextStyle(color: AppTheme.textMuted))),
+          )
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: results.length,
+            itemBuilder: (_, i) => _buildPatientTile(lang, results[i], provider),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPatientTile(LanguageProvider lang, Map<String, dynamic> p, ConsultationProvider provider) {
+    final pid = p['id'] as String? ?? '';
+    final visitCount = provider.patientVisitCount(pid);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: AppTheme.primaryGreen.withValues(alpha: 0.1),
+          child: const Icon(Icons.person_rounded, color: AppTheme.primaryGreen),
+        ),
+        title: Text(p['full_name'] as String? ?? ''),
+        subtitle: Row(
+          children: [
+            Text(p['phone_number'] as String? ?? ''),
+            const SizedBox(width: 8),
+            _buildPatientTypeBadge(provider.isReturningPatient(pid)),
+          ],
+        ),
+        trailing: Text('$visitCount ${lang.t("visits", "inshuro")}',
+            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+        onTap: () => _showPatientProfile(lang, p, pid, provider),
+      ),
+    );
+  }
+
+  Widget _buildPatientTypeBadge(bool isReturning) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: (isReturning ? AppTheme.accentBlue : AppTheme.successGreen).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        isReturning ? 'Returning' : 'New',
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+            color: isReturning ? AppTheme.accentBlue : AppTheme.successGreen),
+      ),
+    );
+  }
+
+  Widget _buildRegularPatients(LanguageProvider lang, ConsultationProvider provider) {
+    final patients = provider.regularPatients;
+    if (provider.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (patients.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.people_outline_rounded, size: 48, color: AppTheme.textMuted),
+            const SizedBox(height: 12),
+            Text(lang.t('No regular patients yet', 'Nta barwayi bakunze bihari'),
+                style: const TextStyle(fontSize: 16, color: AppTheme.textMuted)),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: patients.length,
+      itemBuilder: (_, i) {
+        final p = patients[i];
+        return _buildPatientTile(lang, p, provider);
+      },
+    );
+  }
+
+  void _showPatientProfile(LanguageProvider lang, Map<String, dynamic> patientData, String patientId, ConsultationProvider provider) {
+    final name = patientData['full_name'] as String? ?? '';
+    final phone = patientData['phone_number'] as String? ?? '';
+    final visitCount = provider.patientVisitCount(patientId);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(name),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${lang.t("Phone:", "Telefoni:")} $phone'),
+            const SizedBox(height: 8),
+            Text('${lang.t("Visits:", "Inshuro:")} $visitCount'),
+            const SizedBox(height: 4),
+            Text(provider.isReturningPatient(patientId)
+                ? lang.t('Returning Patient', 'Umurwayi Usanzwe')
+                : lang.t('New Patient', 'Umurwayi Mushya')),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showPatientHistory(lang, patientId, name);
+            },
+            child: Text(lang.t('View History', 'Reba Amateka')),
+          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(lang.t('Close', 'Funga'))),
+        ],
+      ),
+    );
+  }
+
+  void _showPatientHistory(LanguageProvider lang, String patientId, String patientName) async {
+    final provider = context.read<ConsultationProvider>();
+    final history = await provider.getPatientConsultationHistory(patientId);
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$patientName ${lang.t("History", "Amateka")}'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: history.isEmpty
+              ? Text(lang.t('No consultations found', 'Nta buvuzi bubonetse'))
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: history.length,
+                  itemBuilder: (_, i) {
+                    final c = history[i];
+                    return ListTile(
+                      dense: true,
+                      title: Text('${c.statusLabel} — ${c.paymentAmount} RWF'),
+                      subtitle: Text(c.createdAt?.toString().substring(0, 16) ?? ''),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(lang.t('Close', 'Funga'))),
+        ],
+      ),
     );
   }
 

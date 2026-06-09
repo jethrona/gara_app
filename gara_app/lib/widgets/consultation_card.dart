@@ -6,12 +6,14 @@ class ConsultationCard extends StatelessWidget {
   final ConsultationModel consultation;
   final VoidCallback onTap;
   final Widget? trailing;
+  final bool isReturning;
 
   const ConsultationCard({
     super.key,
     required this.consultation,
     required this.onTap,
     this.trailing,
+    this.isReturning = false,
   });
 
   @override
@@ -81,6 +83,20 @@ class ConsultationCard extends StatelessWidget {
                             style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: severityColor),
                           ),
                         ),
+                        if (isReturning) ...[
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppTheme.accentBlue.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'Returning',
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppTheme.accentBlue),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 4),

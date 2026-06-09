@@ -131,6 +131,52 @@ class ConsultationService {
     }
   }
 
+  Future<List<Map<String, dynamic>>> searchPatients(String query) async {
+    final term = query.trim();
+    if (term.isEmpty) return [];
+    final response = await _supabase.client
+        .from('profiles')
+        .select('id, full_name, phone_number, avatar_url, created_at')
+        .eq('is_doctor', false)
+        .or('full_name.ilike.%$term%,phone_number.ilike.%$term%')
+        .order('created_at', ascending: false)
+        .limit(20);
+    return (response as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> getAllPatients() async {
+    final response = await _supabase.client
+        .from('profiles')
+        .select('id, full_name, phone_number, avatar_url, created_at')
+        .eq('is_doctor', false)
+        .order('created_at', ascending: false)
+        .limit(100);
+    return (response as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<ConsultationModel>> getPatientConsultationHistory(String patientId) async {
+    final response = await _supabase.client
+        .from('consultations')
+        .select()
+        .eq('patient_id', patientId)
+        .order('created_at', ascending: false);
+    return (response as List).map((e) => ConsultationModel.fromMap(e)).toList();
+  }
+
+  Future<Map<String, int>> getPatientConsultationCounts() async {
+    final response = await _supabase.client
+        .from('consultations')
+        .select('patient_id');
+    final counts = <String, int>{};
+    for (final row in response as List) {
+      final pid = row['patient_id'] as String?;
+      if (pid != null) {
+        counts[pid] = (counts[pid] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }
+
   Future<Map<String, dynamic>> getDoctorStats() async {
     try {
       final response = await _supabase.client

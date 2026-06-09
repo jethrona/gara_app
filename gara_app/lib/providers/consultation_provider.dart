@@ -23,16 +23,40 @@ class ConsultationProvider extends ChangeNotifier {
     'todayIncome': 0.0,
     'monthlyIncome': 0.0,
   };
+  Map<String, int> _patientVisitCounts = {};
+  List<Map<String, dynamic>> _searchResults = [];
+  List<Map<String, dynamic>> _allPatients = [];
+  bool _isSearching = false;
   RealtimeChannel? _realtimeChannel;
 
   bool get isLoading => _isLoading;
+  bool get isSearching => _isSearching;
   String? get errorMessage => _errorMessage;
   ConsultationModel? get currentConsultation => _currentConsultation;
   List<ConsultationModel> get patientConsultations => _patientConsultations;
   List<ConsultationModel> get pendingPayments => _pendingPayments;
   List<ConsultationModel> get inProcess => _inProcess;
   List<ConsultationModel> get completed => _completed;
+  List<Map<String, dynamic>> get searchResults => _searchResults;
+  List<Map<String, dynamic>> get allPatients => _allPatients;
   Map<String, dynamic> get doctorStats => _doctorStats;
+
+  bool isReturningPatient(String? patientId) {
+    if (patientId == null) return false;
+    final count = _patientVisitCounts[patientId] ?? 0;
+    return count > 1;
+  }
+
+  int patientVisitCount(String? patientId) {
+    if (patientId == null) return 0;
+    return _patientVisitCounts[patientId] ?? 0;
+  }
+
+  List<Map<String, dynamic>> get regularPatients =>
+      _allPatients.where((p) => (_patientVisitCounts[p['id'] as String?] ?? 0) > 1).toList();
+
+  Future<List<ConsultationModel>> getPatientConsultationHistory(String patientId) =>
+      _consultationService.getPatientConsultationHistory(patientId);
 
   Future<ConsultationModel?> submitTriage({
     required String patientId,
@@ -114,6 +138,8 @@ class ConsultationProvider extends ChangeNotifier {
       _completed = await _consultationService
           .getDoctorConsultationsByStatus(CareStatus.complete);
       _doctorStats = await _consultationService.getDoctorStats();
+      _patientVisitCounts = await _consultationService.getPatientConsultationCounts();
+      _allPatients = await _consultationService.getAllPatients();
 
       _isLoading = false;
       notifyListeners();
@@ -122,6 +148,18 @@ class ConsultationProvider extends ChangeNotifier {
       _errorMessage = e.toString();
       notifyListeners();
     }
+  }
+
+  Future<void> searchPatients(String query) async {
+    _isSearching = true;
+    notifyListeners();
+    try {
+      _searchResults = await _consultationService.searchPatients(query);
+    } catch (e) {
+      _searchResults = [];
+    }
+    _isSearching = false;
+    notifyListeners();
   }
 
   Future<void> updateConsultationStatus(int consultationId, CareStatus status) async {
