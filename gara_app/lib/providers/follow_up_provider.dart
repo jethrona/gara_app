@@ -81,29 +81,35 @@ class FollowUpProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> createFollowUp({
+  Future<String?> createFollowUp({
     required int consultationId,
     required String doctorId,
     required String patientId,
     required String doctorMessage,
     required VoidCallback onNotificationSent,
   }) async {
-    final followUp = await _service.createFollowUp(
-      consultationId: consultationId,
-      doctorId: doctorId,
-      patientId: patientId,
-      doctorMessage: doctorMessage,
-    );
-    _followUps.insert(0, followUp);
-    notifyListeners();
+    try {
+      final followUp = await _service.createFollowUp(
+        consultationId: consultationId,
+        doctorId: doctorId,
+        patientId: patientId,
+        doctorMessage: doctorMessage,
+      );
+      _followUps.insert(0, followUp);
+      notifyListeners();
 
-    await _notifService.createNotification(
-      userId: patientId,
-      title: 'Follow-up',
-      body: 'You have a new follow-up message from your doctor.',
-      type: 'follow_up',
-    );
-    onNotificationSent();
+      await _notifService.createNotification(
+        userId: patientId,
+        title: 'Follow-up',
+        body: 'You have a new follow-up message from your doctor.',
+        type: 'follow_up',
+      );
+      onNotificationSent();
+      return null;
+    } catch (e) {
+      debugPrint('[FollowUpProvider] createFollowUp error: $e');
+      return e.toString();
+    }
   }
 
   Future<void> submitReply({

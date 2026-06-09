@@ -264,7 +264,7 @@ class _PatientDashboardState extends State<PatientDashboard> with WidgetsBinding
                                     await notifProvider.markAsRead(n.id!);
                                   }
                                   if (ctx.mounted) Navigator.pop(ctx);
-                                  _handleNotificationTap(n);
+                                  await _handleNotificationTap(n);
                                 },
                               );
                             },
@@ -279,9 +279,9 @@ class _PatientDashboardState extends State<PatientDashboard> with WidgetsBinding
     );
   }
 
-  void _handleNotificationTap(NotificationModel n) {
+  Future<void> _handleNotificationTap(NotificationModel n) async {
     if (n.type == 'follow_up') {
-      _showFollowUpReplyDialog(n);
+      await _showFollowUpReplyDialog(n);
       return;
     }
     if (n.type == 'payment' || n.type == 'consultation') {
@@ -313,15 +313,20 @@ class _PatientDashboardState extends State<PatientDashboard> with WidgetsBinding
     }
   }
 
-  void _showFollowUpReplyDialog(NotificationModel n) {
+  Future<void> _showFollowUpReplyDialog(NotificationModel n) async {
     final lang2 = context.read<LanguageProvider>();
     final followUpProvider = context.read<FollowUpProvider>();
-    final followUp = followUpProvider.followUps.isNotEmpty
-        ? followUpProvider.followUps.first
-        : null;
+
+    await followUpProvider.loadFollowUps();
+
+    final followUp = n.consultationId != null
+        ? followUpProvider.followUps.where((f) => f.consultationId == n.consultationId).firstOrNull
+        : followUpProvider.followUps.isNotEmpty
+            ? followUpProvider.followUps.first
+            : null;
 
     if (followUp == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(lang2.t('No follow-up found.', 'Nta gukurikirana bibonetse.')),
       ));
       return;

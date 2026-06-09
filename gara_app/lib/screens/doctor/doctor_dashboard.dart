@@ -1304,7 +1304,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
               if (controller.text.trim().isEmpty) return;
               Navigator.pop(ctx);
               final followUpProvider = context.read<FollowUpProvider>();
-              await followUpProvider.createFollowUp(
+              final err = await followUpProvider.createFollowUp(
                 consultationId: consultation.id!,
                 doctorId: auth.userId,
                 patientId: patientId,
@@ -1318,6 +1318,12 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
                   }
                 },
               );
+              if (err != null && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('${lang2.t('Failed:', 'Byananiye:')} $err'),
+                  backgroundColor: AppTheme.errorRed,
+                ));
+              }
             },
             child: Text(lang2.t('Send', 'Ohereza')),
           ),

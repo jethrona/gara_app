@@ -339,11 +339,11 @@ class AuthProvider extends ChangeNotifier {
         if (response.statusCode != 200) {
           final body = jsonDecode(response.body) as Map?;
           debugPrint('[AuthProvider] send-email failed: ${body?['error'] ?? response.body}');
-          return 'Failed to send email. Please try again later.';
+          return 'Email service error: ${body?['error'] ?? 'Unknown'}. Make sure SMTP_USER and SMTP_PASS secrets are set in Supabase and the edge function is deployed.';
         }
       } catch (e) {
         debugPrint('[AuthProvider] send-email network error: $e');
-        return 'Could not connect to email service. Check your internet connection.';
+        return 'Could not reach email service. Ensure the send-email edge function is deployed: run `supabase functions deploy send-email --no-verify-jwt --project-ref fwlfokriptbrpwxmgshu` and set SMTP_USER/SMTP_PASS secrets.';
       }
 
       return null;

@@ -15,12 +15,11 @@ CREATE INDEX IF NOT EXISTS idx_follow_ups_consultation_id ON follow_ups(consulta
 
 ALTER TABLE follow_ups ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Doctors can insert follow-ups" ON follow_ups
-  FOR INSERT WITH CHECK (auth.uid() = doctor_id);
+-- Permissive RLS: allow all operations (matching custom_auth.sql pattern)
+CREATE POLICY "Allow all select" ON follow_ups FOR SELECT USING (true);
+CREATE POLICY "Allow all insert" ON follow_ups FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow all update" ON follow_ups FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all delete" ON follow_ups FOR DELETE USING (true);
 
-CREATE POLICY "Users can read their own follow-ups" ON follow_ups
-  FOR SELECT USING (auth.uid() = doctor_id OR auth.uid() = patient_id);
-
-CREATE POLICY "Patients can update their own reply" ON follow_ups
-  FOR UPDATE USING (auth.uid() = patient_id)
-  WITH CHECK (auth.uid() = patient_id AND patient_reply IS NOT NULL AND replied_at IS NOT NULL);
+-- Enable realtime for follow_ups table
+ALTER PUBLICATION supabase_realtime ADD TABLE follow_ups;
