@@ -11,6 +11,7 @@ import '../../providers/consultation_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/follow_up_provider.dart';
+import '../../providers/appointment_provider.dart';
 import '../../widgets/consultation_card.dart';
 import '../../widgets/financial_ticker.dart';
 import '../../widgets/language_toggle.dart';
@@ -42,11 +43,13 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
     final notifProvider = context.read<NotificationProvider>();
     final auth = context.read<AuthProvider>();
     final followUpProvider = context.read<FollowUpProvider>();
+    final appointmentProvider = context.read<AppointmentProvider>();
     consultationProvider.loadDoctorQueues();
     consultationProvider.startRealtimeListener();
     if (auth.profile != null) {
       notifProvider.init(auth.userId);
       followUpProvider.initAsDoctor(auth.userId);
+      appointmentProvider.initAsDoctor(auth.userId);
     }
   }
 
@@ -169,6 +172,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
                                 leading: Icon(
                                   n.type == 'payment' ? Icons.payments_rounded :
                                   n.type == 'consultation' ? Icons.medical_services_rounded :
+                                  n.type == 'appointment' ? Icons.calendar_month_rounded :
                                   Icons.info_rounded,
                                   color: n.isRead ? AppTheme.textMuted : AppTheme.primaryGreen,
                                 ),
@@ -196,6 +200,10 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
   }
 
   void _handleNotificationTap(NotificationModel n, LanguageProvider lang) {
+    if (n.type == 'appointment') {
+      _showAppointmentRequests(lang);
+      return;
+    }
     if (n.consultationId != null) {
       final allConsultations = [
         ...context.read<ConsultationProvider>().inProcess,
@@ -212,6 +220,78 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
         return;
       }
     }
+  }
+
+  void _showAppointmentRequests(LanguageProvider lang) {
+    final appointmentProvider = context.read<AppointmentProvider>();
+    final pending = appointmentProvider.pending;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(lang.t('Appointment Requests', 'Ibisabwa bya Appointment')),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: pending.isEmpty
+              ? Text(lang.t('No pending appointments.', 'Nta appointment zitegereje.'))
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: pending.length,
+                  itemBuilder: (_, i) {
+                    final a = pending[i];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        title: Text(a.patientName ?? lang.t('Patient', 'Umurwayi')),
+                        subtitle: Text(
+                          '${a.requestedDate.toLocal().toString().substring(0, 16)} — ${a.statusLabel}',
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.check_circle_rounded, color: AppTheme.primaryGreen),
+                              onPressed: () async {
+                                Navigator.pop(ctx);
+                                await appointmentProvider.confirmAppointment(
+                                  appointmentId: a.id!,
+                                  patientId: a.patientId,
+                                  onSuccess: () {
+                                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                      content: Text(lang.t('Appointment confirmed!', 'Appointment yemejwe!')),
+                                      backgroundColor: AppTheme.primaryGreen,
+                                    ));
+                                  },
+                                );
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.cancel_rounded, color: AppTheme.errorRed),
+                              onPressed: () async {
+                                Navigator.pop(ctx);
+                                await appointmentProvider.cancelAppointment(
+                                  appointmentId: a.id!,
+                                  patientId: a.patientId,
+                                  onSuccess: () {
+                                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                      content: Text(lang.t('Appointment cancelled.', 'Appointment yahagaritswe.')),
+                                      backgroundColor: AppTheme.errorRed,
+                                    ));
+                                  },
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(lang.t('Close', 'Funga'))),
+        ],
+      ),
+    );
   }
 
   Widget _buildDrawer(LanguageProvider lang, AuthProvider auth) {

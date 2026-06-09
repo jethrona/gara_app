@@ -1,3 +1,4 @@
+import 'dart:html' as html;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -128,27 +129,52 @@ class ChatBubble extends StatelessWidget {
         );
 
       case MessageType.photo:
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: CachedNetworkImage(
-            imageUrl: message.content,
-            placeholder: (_, __) => Container(
-              height: 150,
-              color: AppTheme.surfaceBg,
-              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            ),
-            errorWidget: (_, __, ___) => Container(
-              height: 150,
-              color: AppTheme.surfaceBg,
-              child: const Icon(Icons.broken_image_rounded, color: AppTheme.textMuted),
-            ),
-            fit: BoxFit.cover,
+        return GestureDetector(
+          onTap: () => _downloadImage(message.content),
+          child: Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: CachedNetworkImage(
+                  imageUrl: message.content,
+                  placeholder: (_, __) => Container(
+                    height: 150,
+                    color: AppTheme.surfaceBg,
+                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  ),
+                  errorWidget: (_, __, ___) => Container(
+                    height: 150,
+                    color: AppTheme.surfaceBg,
+                    child: const Icon(Icons.broken_image_rounded, color: AppTheme.textMuted),
+                  ),
+                  fit: BoxFit.cover,
+                ),
+              ),
+              Positioned(
+                right: 8,
+                bottom: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Icon(Icons.download_rounded, color: Colors.white, size: 18),
+                ),
+              ),
+            ],
           ),
         );
 
       case MessageType.voice:
         return _VoicePlayer(message: message, isMe: isMe);
     }
+  }
+
+  static void _downloadImage(String url) {
+    final anchor = html.AnchorElement(href: url)
+      ..download = 'gara_image.jpg'
+      ..click();
   }
 }
 

@@ -1,11 +1,11 @@
 {
-    "name": "gara",
-    "short_name": "gara",
+    "name": "Gara - Telemedicine",
+    "short_name": "Gara",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#10b981",
+    "theme_color": "#10b981",
+    "description": "Gara telemedicine platform - connect with doctors, manage consultations, and track your health.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

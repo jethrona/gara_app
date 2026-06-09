@@ -98,7 +98,7 @@ class ConsultationProvider extends ChangeNotifier {
         aiBriefSummary: aiBrief,
       );
 
-      _notifyDoctorOfNewConsultation(patientName, _currentConsultation!.id);
+      _notifyDoctorOfNewConsultation(patientName, _currentConsultation!.id, symptomCategory);
 
       _isLoading = false;
       notifyListeners();
@@ -260,7 +260,7 @@ class ConsultationProvider extends ChangeNotifier {
     _realtimeChannel = null;
   }
 
-  Future<void> _notifyDoctorOfNewConsultation(String patientName, int? consultationId) async {
+  Future<void> _notifyDoctorOfNewConsultation(String patientName, int? consultationId, String symptomCategory) async {
     try {
       final doctorResponse = await SupabaseService().client
           .from('profiles')
@@ -275,7 +275,7 @@ class ConsultationProvider extends ChangeNotifier {
         await notifService.createNotification(
           userId: doctorId,
           title: 'New Consultation #$consultationId',
-          body: '$patientName submitted a new consultation.',
+          body: '$patientName submitted a new consultation. Category: $symptomCategory',
           type: 'consultation',
           consultationId: consultationId,
         );
