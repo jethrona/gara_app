@@ -309,19 +309,17 @@ class AuthProvider extends ChangeNotifier {
     return null;
   }
 
-  Future<String?> sendPasswordResetOtp(String phone) async {
+  Future<String?> sendPasswordResetOtp(String email) async {
     try {
-      final result = await _authService.generateResetOtp(phone);
-      if (result == null) return 'No account found with this phone number';
+      final normalized = email.trim().toLowerCase();
+      final exists = await _authService.emailExists(normalized);
+      if (!exists) return 'No account found with this email address';
+
+      final result = await _authService.generateResetOtpByEmail(normalized);
+      if (result == null) return 'No account found with this email address';
 
       final otp = result['otp'] as String;
-      final email = result['email'] as String;
 
-      if (email.isEmpty) {
-        return 'No email address on this account. Please contact support to set up your email.';
-      }
-
-      // Send email via Edge Function (works without auth since we deploy with --no-verify-jwt)
       try {
         final response = await http.post(
           Uri.parse('${AppConstants.supabaseUrl}/functions/v1/send-email'),
@@ -330,7 +328,7 @@ class AuthProvider extends ChangeNotifier {
             'Authorization': 'Bearer ${AppConstants.supabaseAnonKey}',
           },
           body: jsonEncode({
-            'to': email,
+            'to': normalized,
             'subject': 'Your Gara Password Reset Code',
             'body': 'Your password reset code is: $otp\n\n'
                 'This code expires in 15 minutes.\n\n'
@@ -348,23 +346,22 @@ class AuthProvider extends ChangeNotifier {
         return 'Could not connect to email service. Check your internet connection.';
       }
 
-      return null; // success — email sent
+      return null;
     } catch (e) {
       return ErrorHandler.friendly(e.toString());
     }
   }
 
   Future<String?> verifyResetOtpAndUpdatePassword({
-    required String phone,
+    required String email,
     required String otp,
     required String newPassword,
   }) async {
     if (newPassword.length < 6) return 'Password must be at least 6 characters';
     try {
-      final error = await _authService.verifyAndResetPassword(phone, otp, newPassword);
-      if (error == null && _rememberMe) {
-        await _authService.saveRememberedCredentials(phone, newPassword);
-      }
+      final error = await _authService.verifyAndResetPasswordByEmail(
+        email.trim().toLowerCase(), otp, newPassword,
+      );
       return error;
     } catch (e) {
       return ErrorHandler.friendly(e.toString());

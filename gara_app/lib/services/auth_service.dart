@@ -318,8 +318,7 @@ class AuthService {
 
   // ── Password Reset OTP ──
 
-  /// Generates a 6-digit OTP, stores it + expiry on the profile row,
-  /// and returns a map with 'otp' and 'email' of the user.
+  /// Generates a 6-digit OTP by phone, returns otp + email.
   Future<Map<String, String>?> generateResetOtp(String phone) async {
     final response = await _supabase.client
         .from('profiles')
@@ -331,8 +330,7 @@ class AuthService {
 
     final row = list.first as Map<String, dynamic>;
     final email = row['email'] as String?;
-
-    final otp = _random.nextInt(900000) + 100000; // 6 digits
+    final otp = _random.nextInt(900000) + 100000;
     final expiry = DateTime.now().add(const Duration(minutes: 15)).toIso8601String();
 
     await _supabase.client
@@ -340,12 +338,34 @@ class AuthService {
         .update({'reset_otp': otp.toString(), 'reset_otp_expiry': expiry})
         .eq('phone_number', phone);
 
-    debugPrint('[AuthService] OTP for $phone: $otp (email: $email, expires $expiry)');
+    debugPrint('[AuthService] OTP for $phone: $otp (email: $email)');
     return {'otp': otp.toString(), 'email': email ?? ''};
   }
 
-  /// Verifies OTP and, if valid, updates the password.
-  /// Returns null on success, error message on failure.
+  /// Generates a 6-digit OTP by email, returns otp + email.
+  Future<Map<String, String>?> generateResetOtpByEmail(String email) async {
+    final normalized = email.trim().toLowerCase();
+    final response = await _supabase.client
+        .from('profiles')
+        .select('id, email')
+        .eq('email', normalized)
+        .limit(1);
+    final list = response as List;
+    if (list.isEmpty) return null;
+
+    final otp = _random.nextInt(900000) + 100000;
+    final expiry = DateTime.now().add(const Duration(minutes: 15)).toIso8601String();
+
+    await _supabase.client
+        .from('profiles')
+        .update({'reset_otp': otp.toString(), 'reset_otp_expiry': expiry})
+        .eq('email', normalized);
+
+    debugPrint('[AuthService] OTP for $normalized: $otp');
+    return {'otp': otp.toString(), 'email': normalized};
+  }
+
+  /// Verifies OTP and updates password (by phone).
   Future<String?> verifyAndResetPassword(
       String phone, String otp, String newPassword) async {
     final response = await _supabase.client
@@ -385,6 +405,49 @@ class AuthService {
     }).eq('id', userId);
 
     debugPrint('[AuthService] Password reset successful for $phone');
+    return null;
+  }
+
+  /// Verifies OTP by email and, if valid, updates the password.
+  Future<String?> verifyAndResetPasswordByEmail(
+      String email, String otp, String newPassword) async {
+    final normalized = email.trim().toLowerCase();
+    final response = await _supabase.client
+        .from('profiles')
+        .select('id, reset_otp, reset_otp_expiry')
+        .eq('email', normalized)
+        .limit(1);
+    final list = response as List;
+    if (list.isEmpty) return 'No account found with this email address';
+
+    final row = list.first as Map<String, dynamic>;
+    final storedOtp = row['reset_otp'] as String?;
+    final expiryStr = row['reset_otp_expiry'] as String?;
+
+    if (storedOtp == null || expiryStr == null) {
+      return 'No reset code requested. Please request a new one.';
+    }
+
+    if (storedOtp != otp) {
+      return 'Wrong reset code. Please try again.';
+    }
+
+    final expiry = DateTime.parse(expiryStr);
+    if (DateTime.now().isAfter(expiry)) {
+      return 'Reset code has expired. Please request a new one.';
+    }
+
+    final userId = row['id'] as String;
+    final salt = _generateSalt();
+    final hash = _hashPassword(newPassword, salt);
+    await _supabase.client.from('profiles').update({
+      'password_hash': hash,
+      'password_salt': salt,
+      'reset_otp': null,
+      'reset_otp_expiry': null,
+    }).eq('id', userId);
+
+    debugPrint('[AuthService] Password reset successful for $normalized');
     return null;
   }
 

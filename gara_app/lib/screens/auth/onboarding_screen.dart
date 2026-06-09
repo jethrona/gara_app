@@ -5,7 +5,6 @@ import '../../providers/auth_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../services/password_strength.dart';
 import '../../widgets/language_toggle.dart';
-import '../../widgets/biometric_pin_dialog.dart';
 import '../patient/patient_dashboard.dart';
 import '../doctor/doctor_dashboard.dart';
 import 'doctor_gate_screen.dart';
@@ -358,7 +357,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   }
 
   void _showForgotPassword(LanguageProvider lang) {
-    final phoneController = TextEditingController();
+    final emailController = TextEditingController();
     final otpController = TextEditingController();
     final newPasswordController = TextEditingController();
     bool showNewPassword = false;
@@ -378,14 +377,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                   if (!codeSent) ...[
-                  Text(lang.t('Enter your phone number to receive a reset code via email.', 'Shyiramo numero yawe kugirango wakire kode ukoresheje imeri.')),
+                  Text(lang.t('Enter your email to receive a reset code.', 'Shyiramo imeri yawe kugirango wakire kode yo guhindura.')),
                   const SizedBox(height: 16),
                   TextField(
-                    controller: phoneController,
-                    keyboardType: TextInputType.phone,
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
                     decoration: InputDecoration(
-                      labelText: lang.t('Phone Number', 'Nomero ya Telefone'),
-                      prefixIcon: const Icon(Icons.phone_android),
+                      labelText: lang.t('Email', 'Imeri'),
+                      prefixIcon: const Icon(Icons.email_outlined),
                     ),
                   ),
                 ] else ...[
@@ -433,10 +432,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                 final auth = context.read<AuthProvider>();
 
                 if (!codeSent) {
-                  final phone = phoneController.text.trim();
-                  if (phone.isEmpty) return;
+                  final email = emailController.text.trim();
+                  if (email.isEmpty || !email.contains('@')) {
+                    setDialogState(() => statusMsg = 'Please enter a valid email address.');
+                    return;
+                  }
                   setDialogState(() { processing = true; statusMsg = null; });
-                  final error = await auth.sendPasswordResetOtp(phone);
+                  final error = await auth.sendPasswordResetOtp(email);
                   setDialogState(() {
                     processing = false;
                     if (error == null) {
@@ -456,7 +458,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                   }
                   setDialogState(() { processing = true; statusMsg = null; });
                   final error = await auth.verifyResetOtpAndUpdatePassword(
-                    phone: phoneController.text.trim(),
+                    email: emailController.text.trim(),
                     otp: otp,
                     newPassword: newPassword,
                   );
@@ -516,7 +518,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
     if (error == null && mounted) {
       auth.clearError();
-      await _checkBiometricSetup();
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -556,16 +557,4 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     }
   }
 
-  Future<void> _checkBiometricSetup() async {
-    final auth = context.read<AuthProvider>();
-    if (auth.hasBiometrics) {
-      await auth.authenticateWithBiometrics();
-    } else if (!auth.hasPin) {
-      if (!mounted) return;
-      await showDialog(
-        context: context,
-        builder: (_) => const PinSetupDialog(),
-      );
-    }
-  }
 }
