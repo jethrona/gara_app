@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../config/constants.dart';
 import '../models/profile_model.dart';
 import '../services/auth_service.dart';
@@ -117,6 +119,7 @@ class AuthProvider extends ChangeNotifier {
     required String phoneNumber,
     required String fullName,
     required String password,
+    String? email,
   }) async {
     _isLoading = true;
     _errorMessage = null;
@@ -156,6 +159,7 @@ class AuthProvider extends ChangeNotifier {
         phone: phoneNumber,
         password: password,
         fullName: fullName,
+        email: email,
       );
 
       _userId = profile.id;
@@ -223,6 +227,7 @@ class AuthProvider extends ChangeNotifier {
     required String fullName,
     required String registrationToken,
     required String password,
+    String? email,
   }) async {
     if (registrationToken != AppConstants.doctorRegistrationToken) {
       return 'Invalid doctor registration token';
@@ -267,6 +272,7 @@ class AuthProvider extends ChangeNotifier {
         phone: phoneNumber,
         password: password,
         fullName: fullName,
+        email: email,
         isDoctor: true,
       );
 
@@ -305,9 +311,44 @@ class AuthProvider extends ChangeNotifier {
 
   Future<String?> sendPasswordResetOtp(String phone) async {
     try {
-      final otp = await _authService.generateResetOtp(phone);
-      if (otp == null) return 'No account found with this phone number';
-      return null; // success — OTP generated (shown in debugPrint)
+      final result = await _authService.generateResetOtp(phone);
+      if (result == null) return 'No account found with this phone number';
+
+      final otp = result['otp'] as String;
+      final email = result['email'] as String;
+
+      if (email.isEmpty) {
+        return 'No email address on this account. Please contact support to set up your email.';
+      }
+
+      // Send email via Edge Function (works without auth since we deploy with --no-verify-jwt)
+      try {
+        final response = await http.post(
+          Uri.parse('${AppConstants.supabaseUrl}/functions/v1/send-email'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ${AppConstants.supabaseAnonKey}',
+          },
+          body: jsonEncode({
+            'to': email,
+            'subject': 'Your Gara Password Reset Code',
+            'body': 'Your password reset code is: $otp\n\n'
+                'This code expires in 15 minutes.\n\n'
+                'If you did not request a password reset, please ignore this email.',
+          }),
+        );
+
+        if (response.statusCode != 200) {
+          final body = jsonDecode(response.body) as Map?;
+          debugPrint('[AuthProvider] send-email failed: ${body?['error'] ?? response.body}');
+          return 'Failed to send email. Please try again later.';
+        }
+      } catch (e) {
+        debugPrint('[AuthProvider] send-email network error: $e');
+        return 'Could not connect to email service. Check your internet connection.';
+      }
+
+      return null; // success — email sent
     } catch (e) {
       return ErrorHandler.friendly(e.toString());
     }

@@ -158,6 +158,7 @@ class AuthService {
     required String phone,
     required String password,
     required String fullName,
+    String? email,
     bool isDoctor = false,
   }) async {
     final salt = _generateSalt();
@@ -165,7 +166,7 @@ class AuthService {
     final sessionToken = _uuid.v4();
     final userId = _uuid.v4();
 
-    final response = await _supabase.client.from('profiles').insert({
+    final payload = <String, dynamic>{
       'id': userId,
       'phone_number': phone,
       'full_name': fullName,
@@ -173,7 +174,12 @@ class AuthService {
       'password_hash': hash,
       'password_salt': salt,
       'session_token': sessionToken,
-    }).select().single();
+    };
+    if (email != null && email.isNotEmpty) {
+      payload['email'] = email.trim().toLowerCase();
+    }
+
+    final response = await _supabase.client.from('profiles').insert(payload).select().single();
 
     await _saveSession(userId, sessionToken);
     return ProfileModel.fromMap(response);
@@ -292,6 +298,15 @@ class AuthService {
     return (response as List).isNotEmpty;
   }
 
+  Future<bool> emailExists(String email) async {
+    final response = await _supabase.client
+        .from('profiles')
+        .select('id')
+        .eq('email', email.trim().toLowerCase())
+        .limit(1);
+    return (response as List).isNotEmpty;
+  }
+
   Future<void> updatePassword(String userId, String newPassword) async {
     final salt = _generateSalt();
     final hash = _hashPassword(newPassword, salt);
@@ -304,15 +319,18 @@ class AuthService {
   // ── Password Reset OTP ──
 
   /// Generates a 6-digit OTP, stores it + expiry on the profile row,
-  /// and returns the OTP code. In production this would be sent via SMS.
-  Future<String?> generateResetOtp(String phone) async {
+  /// and returns a map with 'otp' and 'email' of the user.
+  Future<Map<String, String>?> generateResetOtp(String phone) async {
     final response = await _supabase.client
         .from('profiles')
-        .select('id')
+        .select('id, email')
         .eq('phone_number', phone)
         .limit(1);
     final list = response as List;
     if (list.isEmpty) return null;
+
+    final row = list.first as Map<String, dynamic>;
+    final email = row['email'] as String?;
 
     final otp = _random.nextInt(900000) + 100000; // 6 digits
     final expiry = DateTime.now().add(const Duration(minutes: 15)).toIso8601String();
@@ -322,8 +340,8 @@ class AuthService {
         .update({'reset_otp': otp.toString(), 'reset_otp_expiry': expiry})
         .eq('phone_number', phone);
 
-    debugPrint('[AuthService] OTP for $phone: $otp (expires $expiry)');
-    return otp.toString();
+    debugPrint('[AuthService] OTP for $phone: $otp (email: $email, expires $expiry)');
+    return {'otp': otp.toString(), 'email': email ?? ''};
   }
 
   /// Verifies OTP and, if valid, updates the password.

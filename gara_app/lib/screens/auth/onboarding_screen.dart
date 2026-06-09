@@ -22,6 +22,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
   final _regNameController = TextEditingController();
   final _regPhoneController = TextEditingController();
+  final _regEmailController = TextEditingController();
   final _regPasswordController = TextEditingController();
   bool _agreedToTerms = false;
   PasswordStrength _passwordStrength = PasswordStrength.veryWeak;
@@ -55,6 +56,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     _tabController.dispose();
     _regNameController.dispose();
     _regPhoneController.dispose();
+    _regEmailController.dispose();
     _regPasswordController.dispose();
     _loginPhoneController.dispose();
     _loginPasswordController.dispose();
@@ -214,6 +216,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
           ),
           const SizedBox(height: 14),
           TextField(
+            controller: _regEmailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: InputDecoration(
+              labelText: lang.t('Email (for password reset)', 'Imeri (yo guhindura ijambo ry\'ibanga)'),
+              hintText: 'email@example.com',
+              prefixIcon: const Icon(Icons.email_outlined),
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextField(
             controller: _regPasswordController,
             obscureText: !_showRegPassword,
             decoration: InputDecoration(
@@ -365,8 +377,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (!codeSent) ...[
-                  Text(lang.t('Enter your phone number to receive a reset code.', 'Shyiramo numero yawe kugirango wakire kode yo guhindura.')),
+                  if (!codeSent) ...[
+                  Text(lang.t('Enter your phone number to receive a reset code via email.', 'Shyiramo numero yawe kugirango wakire kode ukoresheje imeri.')),
                   const SizedBox(height: 16),
                   TextField(
                     controller: phoneController,
@@ -377,7 +389,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                     ),
                   ),
                 ] else ...[
-                  Text(lang.t('Enter the reset code and your new password.', 'Shyiramo kode n\'ijambo ry\'ibanga rishya.')),
+                  Text(lang.t('Enter the reset code sent to your email and your new password.', 'Shyiramo kode yoherejwe kuri imeri yawe n\'ijambo ry\'ibanga rishya.')),
                   const SizedBox(height: 16),
                   TextField(
                     controller: otpController,
@@ -428,7 +440,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                   setDialogState(() {
                     processing = false;
                     if (error == null) {
-                      statusMsg = '✅ Reset code sent to your phone. Check the debug console or SMS.';
+                      statusMsg = '✅ Reset code sent to your email.';
                       codeSent = true;
                     } else {
                       statusMsg = error;
@@ -498,6 +510,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     final error = await auth.registerPatient(
       phoneNumber: phone,
       fullName: name,
+      email: _regEmailController.text.trim(),
       password: password,
     );
 

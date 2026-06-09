@@ -16,6 +16,7 @@ class DoctorGateScreen extends StatefulWidget {
 class _DoctorGateScreenState extends State<DoctorGateScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
   final _tokenController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -26,6 +27,7 @@ class _DoctorGateScreenState extends State<DoctorGateScreen> {
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _emailController.dispose();
     _tokenController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -90,6 +92,15 @@ class _DoctorGateScreenState extends State<DoctorGateScreen> {
                     prefixIcon: const Icon(Icons.phone_android),
                   ),
                   validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: lang.t('Email (for password reset)', 'Imeri (yo guhindura ijambo ry\'ibanga)'),
+                    prefixIcon: const Icon(Icons.email_outlined),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -173,6 +184,7 @@ class _DoctorGateScreenState extends State<DoctorGateScreen> {
     final error = await auth.registerDoctor(
       phoneNumber: phone,
       fullName: _nameController.text.trim(),
+      email: _emailController.text.trim(),
       registrationToken: _tokenController.text.trim(),
       password: _passwordController.text.trim(),
     );
