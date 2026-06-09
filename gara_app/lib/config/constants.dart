@@ -13,11 +13,22 @@ class AppConstants {
 
   static const List<String> biologicalSexOptions = ['Male', 'Female'];
 
+  static const Map<String, String> biologicalSexRw = {
+    'Male': 'Gabo',
+    'Female': 'Gore',
+  };
+
   static const List<String> severityOptions = [
     'Mild – No immediate concern',
     'Moderate – Needs attention soon',
     'Severe – Urgent',
   ];
+
+  static const Map<String, String> severityRw = {
+    'Mild': 'Cyoroheje',
+    'Moderate': 'Giciriritse',
+    'Severe': 'Gikomeye',
+  };
 
   static const List<String> durationOptions = [
     'Just started (Today)',
@@ -26,6 +37,14 @@ class AppConstants {
     'More than a week (1-2 weeks)',
     'Long-term (2+ weeks)',
   ];
+
+  static const Map<String, String> durationRw = {
+    'Just started (Today)': 'Byatangiye (Uyu munsi)',
+    'Few days (1-3 days)': 'Iminsi mike (1-3)',
+    'About a week (4-7 days)': 'Hafi yicyumweru (4-7)',
+    'More than a week (1-2 weeks)': 'Icyumweru kirusha (1-2)',
+    'Long-term (2+ weeks)': 'Igihe kirekire (2+)',
+  };
 
   static const List<String> symptomCategories = [
     'Fever & Flu',
@@ -41,4 +60,19 @@ class AppConstants {
     'Injury & Trauma',
     'Other',
   ];
+
+  static const Map<String, String> symptomCategoryRw = {
+    'Fever & Flu': 'Umusanzu n\'Ibicurane',
+    'Headache & Migraine': 'Umutwe n\'Migraine',
+    'Stomach & Digestive': 'Igifu n\'Igogoka',
+    'Chest & Breathing': 'Igituza n\'Umuherero',
+    'Skin & Allergies': 'Uruhu n\'Allergies',
+    'Muscle & Joint': 'Imitsi n\'Ingingo',
+    'Urinary & Kidney': 'Inkari n\'Impyiko',
+    'Eye & Ear': 'Amaso n\'Ugatugu',
+    'Dental & Mouth': 'Amenyo n\'Umunwa',
+    'Mental Health': 'Ubuzima bwo mu mutwe',
+    'Injury & Trauma': 'Gukomereka',
+    'Other': 'Ibindi',
+  };
 }

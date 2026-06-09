@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import '../../config/constants.dart';
 import '../../config/theme.dart';
 import '../../models/consultation_model.dart';
 import '../../providers/auth_provider.dart';
@@ -61,6 +62,11 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.person_search_rounded),
+            tooltip: lang.t('Patient Info', 'Amakuru y\'Umurwayi'),
+            onPressed: () => _showPatientInfo(lang),
+          ),
           IconButton(
             icon: const Icon(Icons.assignment_rounded),
             tooltip: lang.t('AI Brief', 'Ibisobanuro bya AI'),
@@ -315,6 +321,61 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
     _scrollToBottom();
   }
 
+  void _showPatientInfo(LanguageProvider lang) {
+    final c = widget.consultation;
+    final severityKey = c.severityLevel.split('–')[0].trim();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(lang.t('Patient Information', 'Amakuru y\'Umurwayi')),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _infoRow(lang.t('Name', 'Izina'), c.patientName ?? '—'),
+              const Divider(),
+              _infoRow(lang.t('Biological Sex', 'Igitsina'), lang.t(c.biologicalSex, AppConstants.biologicalSexRw[c.biologicalSex] ?? c.biologicalSex)),
+              const Divider(),
+              _infoRow(lang.t('Severity', 'Uburemere'), lang.t(severityKey, AppConstants.severityRw[severityKey] ?? severityKey)),
+              const Divider(),
+              if (c.symptomCategory != null) ...[
+                _infoRow(lang.t('Category', 'Icyiciro'), lang.t(c.symptomCategory!, AppConstants.symptomCategoryRw[c.symptomCategory!] ?? c.symptomCategory!)),
+                const Divider(),
+              ],
+              if (c.symptomDescription != null && c.symptomDescription!.isNotEmpty) ...[
+                _infoRow(lang.t('Description', 'Ibisobanuro'), c.symptomDescription!),
+                const Divider(),
+              ],
+              if (c.aiBriefSummary != null) ...[
+                Text(lang.t('AI Clinical Brief', 'Incamake ya AI'),
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                const SizedBox(height: 4),
+                Text(c.aiBriefSummary!, style: const TextStyle(fontSize: 12, height: 1.4)),
+                const Divider(),
+              ],
+              _infoRow(lang.t('Duration', 'Igihe'), lang.t(c.durationSymptoms, AppConstants.durationRw[c.durationSymptoms] ?? c.durationSymptoms)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(lang.t('Close', 'Funga'))),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+        const SizedBox(height: 2),
+        Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+      ],
+    );
+  }
+
   void _showAiBrief(LanguageProvider lang) {
     showDialog(
       context: context,
@@ -327,7 +388,7 @@ class _DoctorChatWorkspaceState extends State<DoctorChatWorkspace> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(lang.t('Close', 'Funga'))),
         ],
       ),
     );

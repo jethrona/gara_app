@@ -42,6 +42,7 @@ class ConsultationProvider extends ChangeNotifier {
     required String symptomCategory,
     required String symptomDescription,
     required String patientName,
+    String language = 'en',
   }) async {
     _isLoading = true;
     _errorMessage = null;
@@ -57,6 +58,7 @@ class ConsultationProvider extends ChangeNotifier {
           symptomCategory: symptomCategory,
           symptomDescription: symptomDescription,
           patientName: patientName,
+          language: language,
         );
       } catch (e) {
         debugPrint('[submitTriage] AI brief error: $e');
@@ -67,6 +69,8 @@ class ConsultationProvider extends ChangeNotifier {
         biologicalSex: biologicalSex,
         severityLevel: severityLevel,
         durationSymptoms: durationSymptoms,
+        symptomCategory: symptomCategory,
+        symptomDescription: symptomDescription,
         aiBriefSummary: aiBrief,
       );
 
@@ -149,8 +153,8 @@ class ConsultationProvider extends ChangeNotifier {
           final notifService = NotificationService();
           await notifService.createNotification(
             userId: patientId,
-            title: 'Payment Confirmed ✓',
-            body: 'Your payment of ${amount.toStringAsFixed(0)} RWF was confirmed. You can now chat with the doctor.',
+            title: 'Payment Confirmed ✓ / Amafaranga Yemejwe ✓',
+            body: 'Your payment of ${amount.toStringAsFixed(0)} RWF was confirmed. You can now chat with the doctor.\nAmafaranga ${amount.toStringAsFixed(0)} RWF yemejwe. Ushobora ubu kuvugana n\'umuganga.',
             type: 'payment',
             consultationId: consultationId,
           );

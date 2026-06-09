@@ -10,6 +10,8 @@ class ConsultationService {
     required String biologicalSex,
     required String severityLevel,
     required String durationSymptoms,
+    String? symptomCategory,
+    String? symptomDescription,
     String? aiBriefSummary,
   }) async {
     final consultation = ConsultationModel(
@@ -17,6 +19,8 @@ class ConsultationService {
       biologicalSex: biologicalSex,
       severityLevel: severityLevel,
       durationSymptoms: durationSymptoms,
+      symptomCategory: symptomCategory,
+      symptomDescription: symptomDescription,
       aiBriefSummary: aiBriefSummary,
     );
 

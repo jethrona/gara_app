@@ -7,6 +7,8 @@ class ConsultationModel {
   final String biologicalSex;
   final String severityLevel;
   final String durationSymptoms;
+  final String? symptomCategory;
+  final String? symptomDescription;
   final String? aiBriefSummary;
   final String? momoTransactionId;
   final double paymentAmount;
@@ -23,6 +25,8 @@ class ConsultationModel {
     required this.biologicalSex,
     required this.severityLevel,
     required this.durationSymptoms,
+    this.symptomCategory,
+    this.symptomDescription,
     this.aiBriefSummary,
     this.momoTransactionId,
     this.paymentAmount = 0.0,
@@ -41,6 +45,8 @@ class ConsultationModel {
       biologicalSex: map['biological_sex'] as String? ?? '',
       severityLevel: map['severity_level'] as String? ?? '',
       durationSymptoms: map['duration_symptoms'] as String? ?? '',
+      symptomCategory: map['symptom_category'] as String?,
+      symptomDescription: map['symptom_description'] as String?,
       aiBriefSummary: map['ai_brief_summary'] as String?,
       momoTransactionId: map['momo_transaction_id'] as String?,
       paymentAmount: (map['payment_amount'] as num?)?.toDouble() ?? 0.0,
@@ -60,6 +66,8 @@ class ConsultationModel {
       'biological_sex': biologicalSex,
       'severity_level': severityLevel,
       'duration_symptoms': durationSymptoms,
+      'symptom_category': symptomCategory,
+      'symptom_description': symptomDescription,
       'ai_brief_summary': aiBriefSummary,
       'momo_transaction_id': momoTransactionId,
       'payment_amount': paymentAmount,
@@ -99,6 +107,8 @@ class ConsultationModel {
     String? biologicalSex,
     String? severityLevel,
     String? durationSymptoms,
+    String? symptomCategory,
+    String? symptomDescription,
     String? aiBriefSummary,
     String? momoTransactionId,
     double? paymentAmount,
@@ -115,6 +125,8 @@ class ConsultationModel {
       biologicalSex: biologicalSex ?? this.biologicalSex,
       severityLevel: severityLevel ?? this.severityLevel,
       durationSymptoms: durationSymptoms ?? this.durationSymptoms,
+      symptomCategory: symptomCategory ?? this.symptomCategory,
+      symptomDescription: symptomDescription ?? this.symptomDescription,
       aiBriefSummary: aiBriefSummary ?? this.aiBriefSummary,
       momoTransactionId: momoTransactionId ?? this.momoTransactionId,
       paymentAmount: paymentAmount ?? this.paymentAmount,

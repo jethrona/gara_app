@@ -13,6 +13,10 @@ ALTER TABLE consultations ADD COLUMN IF NOT EXISTS payment_amount NUMERIC(12,2);
 
 ALTER TABLE consultations ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;
 
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS symptom_category TEXT;
+
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS symptom_description TEXT;
+
 ALTER TABLE clinical_documents ADD COLUMN IF NOT EXISTS patient_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_clinical_docs_patient ON clinical_documents(patient_id);
 

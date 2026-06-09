@@ -9,6 +9,7 @@ class AIService {
     required String symptomCategory,
     required String symptomDescription,
     required String patientName,
+    String language = 'en',
   }) async {
     try {
       final response = await Supabase.instance.client.functions.invoke(
@@ -20,6 +21,7 @@ class AIService {
           'symptomCategory': symptomCategory,
           'symptomDescription': symptomDescription,
           'patientName': patientName,
+          'language': language,
         },
       );
 

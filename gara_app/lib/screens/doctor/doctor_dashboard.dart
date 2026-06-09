@@ -248,7 +248,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
             ),
             ListTile(
               leading: const Icon(Icons.tune_rounded, color: AppTheme.textSecondary),
-              title: Text('Settings'),
+              title: Text(lang.t('Settings', 'Igenamiterere')),
               onTap: () {
                 Navigator.pop(context);
                 _showSettings(lang);
@@ -370,7 +370,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Practice Settings'),
+        title: Text(lang?.t('Practice Settings', 'Igenamiterere ry\'Ubuvuzi') ?? 'Practice Settings'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -378,36 +378,36 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
               TextField(
                 controller: feeController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Consultation Fee (RWF)',
-                  prefixIcon: Icon(Icons.monetization_on_rounded),
+                decoration: InputDecoration(
+                  labelText: lang?.t('Consultation Fee (RWF)', 'Amafaranga y\'Ubuvuzi (RWF)') ?? 'Consultation Fee (RWF)',
+                  prefixIcon: const Icon(Icons.monetization_on_rounded),
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Display Name',
-                  prefixIcon: Icon(Icons.person_rounded),
+                decoration: InputDecoration(
+                  labelText: lang?.t('Display Name', 'Amazina Agaragara') ?? 'Display Name',
+                  prefixIcon: const Icon(Icons.person_rounded),
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: clinicController,
-                decoration: const InputDecoration(
-                  labelText: 'Clinic Name',
-                  hintText: 'e.g. GARA Health Center',
-                  prefixIcon: Icon(Icons.local_hospital_rounded),
+                decoration: InputDecoration(
+                  labelText: lang?.t('Clinic Name', 'Izina ry\'Ivuriro') ?? 'Clinic Name',
+                  hintText: lang?.t('e.g. GARA Health Center', 'Urugero: Ivuriro rya GARA') ?? 'e.g. GARA Health Center',
+                  prefixIcon: const Icon(Icons.local_hospital_rounded),
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'MoMo Phone Number',
-                  hintText: 'e.g. 0788123456',
-                  prefixIcon: Icon(Icons.phone_rounded),
+                decoration: InputDecoration(
+                  labelText: lang?.t('MoMo Phone Number', 'Nomero ya MoMo') ?? 'MoMo Phone Number',
+                  hintText: lang?.t('e.g. 0788123456', 'Urugero: 0788123456') ?? 'e.g. 0788123456',
+                  prefixIcon: const Icon(Icons.phone_rounded),
                 ),
               ),
             ],
@@ -645,14 +645,14 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
   }
 
   void _showPaymentVerification(ConsultationModel consultation) {
+    final lang = context.read<LanguageProvider>();
     if (_confirmedPaymentIds.contains(consultation.id)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Payment already confirmed for this consultation.'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(lang.t('Payment already confirmed for this consultation.', 'Amafaranga yasemejwe kuri ubu buvuzi.')),
       ));
       return;
     }
 
-    final lang = context.read<LanguageProvider>();
     final auth = context.read<AuthProvider>();
     final transactionController = TextEditingController();
     final profileFee = auth.profile?.consultationFee ?? AppConstants.consultationFee;
@@ -675,11 +675,12 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
               Text(lang.t('Verify Payment', 'Emeza Amafaranga'),
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
-              Text('${lang.t("Patient:", "Umurwayi:")} ${consultation.patientName ?? "Unknown"}',
+              Text('${lang.t("Patient:", "Umurwayi:")} ${consultation.patientName ?? lang.t("Unknown", "Ntazwi")}',
                   style: const TextStyle(color: AppTheme.textSecondary)),
               const SizedBox(height: 20),
               TextField(
                 controller: amountController,
+                readOnly: true,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
                   labelText: lang.t('Amount (RWF)', 'Amafaranga (RWF)'),
@@ -840,27 +841,32 @@ class _DoctorDashboardState extends State<DoctorDashboard> with SingleTickerProv
   }
 
   void _showCompletedDetails(ConsultationModel consultation) {
+    final lang2 = context.read<LanguageProvider>();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Consultation #${consultation.id}'),
+        title: Text('${lang2.t('Consultation', 'Ubuvuzi')} #${consultation.id}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Patient: ${consultation.patientName ?? "Unknown"}'),
-            Text('Sex: ${consultation.biologicalSex}'),
-            Text('Severity: ${consultation.severityLevel.split("–")[0].trim()}'),
-            Text('Amount: ${consultation.paymentAmount} RWF'),
+            Text('${lang2.t('Patient:', 'Umurwayi:')} ${consultation.patientName ?? lang2.t('Unknown', 'Ntazwi')}'),
+            Text('${lang2.t('Sex:', 'Igitsina:')} ${lang2.t(consultation.biologicalSex, AppConstants.biologicalSexRw[consultation.biologicalSex] ?? consultation.biologicalSex)}'),
+            Text('${lang2.t('Severity:', 'Uburemere:')} ${lang2.t(consultation.severityLevel.split('–')[0].trim(), AppConstants.severityRw[consultation.severityLevel.split('–')[0].trim()] ?? consultation.severityLevel.split('–')[0].trim())}'),
+            if (consultation.symptomCategory != null)
+              Text('${lang2.t('Category:', 'Icyiciro:')} ${lang2.t(consultation.symptomCategory!, AppConstants.symptomCategoryRw[consultation.symptomCategory!] ?? consultation.symptomCategory!)}'),
+            if (consultation.symptomDescription != null && consultation.symptomDescription!.isNotEmpty)
+              Text('${lang2.t('Description:', 'Ibisobanuro:')} ${consultation.symptomDescription}'),
+            Text('${lang2.t('Amount:', 'Amafaranga:')} ${consultation.paymentAmount} RWF'),
             if (consultation.aiBriefSummary != null) ...[
               const SizedBox(height: 8),
-              const Text('AI Brief:', style: TextStyle(fontWeight: FontWeight.w600)),
+              Text(lang2.t('AI Brief:', 'AI Incamake:'), style: const TextStyle(fontWeight: FontWeight.w600)),
               Text(consultation.aiBriefSummary!, style: const TextStyle(fontSize: 12)),
             ],
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(lang2.t('Close', 'Funga'))),
         ],
       ),
     );

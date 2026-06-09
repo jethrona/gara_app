@@ -192,7 +192,7 @@ class _TriageFormState extends State<TriageForm> {
           ...AppConstants.biologicalSexOptions.map((sex) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: ChoiceChip(
-              label: Text(sex),
+              label: Text(lang.t(sex, AppConstants.biologicalSexRw[sex] ?? sex)),
               selected: _selectedSex == sex,
               onSelected: (v) {
                 setState(() => _selectedSex = v ? sex : null);
@@ -224,6 +224,7 @@ class _TriageFormState extends State<TriageForm> {
           ...AppConstants.severityOptions.map((s) {
             final isSevere = s.startsWith('Severe');
             final isModerate = s.startsWith('Moderate');
+            final key = s.split('–')[0].trim();
             Color chipColor = AppTheme.successGreen;
             IconData chipIcon = Icons.sentiment_satisfied_rounded;
             if (isModerate) { chipColor = AppTheme.accentOrange; chipIcon = Icons.sentiment_neutral_rounded; }
@@ -232,7 +233,7 @@ class _TriageFormState extends State<TriageForm> {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: ChoiceChip(
-                label: Text(s.split('–')[0].trim()),
+                label: Text(lang.t(key, AppConstants.severityRw[key] ?? key)),
                 selected: _selectedSeverity == s,
                 onSelected: (v) {
                   setState(() => _selectedSeverity = v ? s : null);
@@ -264,7 +265,7 @@ class _TriageFormState extends State<TriageForm> {
             child: ChoiceChip(
               label: SizedBox(
                 width: MediaQuery.of(context).size.width - 80,
-                child: Text(d),
+                child: Text(lang.t(d, AppConstants.durationRw[d] ?? d)),
               ),
               selected: _selectedDuration == d,
               onSelected: (v) {
@@ -311,7 +312,7 @@ class _TriageFormState extends State<TriageForm> {
               children: _filteredCategories.map((cat) => Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: ChoiceChip(
-                  label: SizedBox(width: MediaQuery.of(context).size.width - 80, child: Text(cat)),
+                  label: SizedBox(width: MediaQuery.of(context).size.width - 80, child: Text(lang.t(cat, AppConstants.symptomCategoryRw[cat] ?? cat))),
                   selected: _selectedCategory == cat,
                   onSelected: (v) {
                     setState(() => _selectedCategory = v ? cat : null);
@@ -379,21 +380,21 @@ class _TriageFormState extends State<TriageForm> {
             Text(lang.t('Review Your Information', 'Reba amakuru yawe'),
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
             const SizedBox(height: 20),
-            _reviewItem(lang.t('Biological Sex', 'Igitsina'), _selectedSex ?? ''),
-            _reviewItem(lang.t('Severity', 'Uburemere'), _selectedSeverity?.split('–')[0].trim() ?? ''),
-            _reviewItem(lang.t('Duration', 'Igihe'), _selectedDuration ?? ''),
-            _reviewItem(lang.t('Category', 'Icyiciro'), _selectedCategory ?? ''),
+            _reviewItem(lang.t('Biological Sex', 'Igitsina'), _selectedSex != null ? lang.t(_selectedSex!, AppConstants.biologicalSexRw[_selectedSex!] ?? _selectedSex!) : ''),
+            _reviewItem(lang.t('Severity', 'Uburemere'), _selectedSeverity != null ? lang.t(_selectedSeverity!.split('–')[0].trim(), AppConstants.severityRw[_selectedSeverity!.split('–')[0].trim()] ?? _selectedSeverity!.split('–')[0].trim()) : ''),
+            _reviewItem(lang.t('Duration', 'Igihe'), _selectedDuration != null ? lang.t(_selectedDuration!, AppConstants.durationRw[_selectedDuration!] ?? _selectedDuration!) : ''),
+            _reviewItem(lang.t('Category', 'Icyiciro'), _selectedCategory != null ? lang.t(_selectedCategory!, AppConstants.symptomCategoryRw[_selectedCategory!] ?? _selectedCategory!) : ''),
             _reviewItem(lang.t('Description', 'Ibisobanuro'), _descriptionController.text.length > 80
                 ? '${_descriptionController.text.substring(0, 80)}...'
                 : _descriptionController.text),
             if (_aiProcessing) ...[
               const SizedBox(height: 20),
-              const Center(
+              Center(
                 child: Column(
                   children: [
-                    CircularProgressIndicator(color: AppTheme.primaryGreen),
-                    SizedBox(height: 12),
-                    Text('AI is analyzing your symptoms...', style: TextStyle(color: AppTheme.textSecondary)),
+                    const CircularProgressIndicator(color: AppTheme.primaryGreen),
+                    const SizedBox(height: 12),
+                    Text(lang.t('AI is analyzing your symptoms...', 'AI iri gusesengura ibimenyetso byawe...'), style: const TextStyle(color: AppTheme.textSecondary)),
                   ],
                 ),
               ),
@@ -481,6 +482,7 @@ class _TriageFormState extends State<TriageForm> {
         symptomCategory: _selectedCategory!,
         symptomDescription: _descriptionController.text.trim(),
         patientName: auth.profile?.fullName ?? '',
+        language: lang.isKinyarwanda ? 'rw' : 'en',
       );
 
       setState(() => _aiProcessing = false);

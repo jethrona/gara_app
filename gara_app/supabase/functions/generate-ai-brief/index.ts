@@ -23,6 +23,7 @@ interface GenerateRequest {
   symptomCategory: string;
   symptomDescription: string;
   patientName: string;
+  language?: string;
 }
 
 serve(async (req: Request) => {
@@ -71,9 +72,10 @@ serve(async (req: Request) => {
     }
   }
 
+  const lang = body.language === "rw" ? "Kinyarwanda" : "English";
   const systemPrompt =
     "You are a medical triage AI assistant for the Gara Telemedicine Platform in Rwanda. " +
-    "Generate a concise, objective clinical brief in English based on the patient-reported information below. " +
+    `Generate a concise, objective clinical brief in ${lang} based on the patient-reported information below. ` +
     "Format your response exactly as follows:\n\n" +
     "CLINICAL BRIEF:\n" +
     "- Presenting Complaint: [1-2 sentence summary]\n" +
